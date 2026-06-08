@@ -114,9 +114,10 @@ jobs:
         run: vivliostyle-cli/slim/build.sh
 
       - name: Install regctl
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl -fsSL "https://github.com/regclient/regclient/releases/download/v0.11.5/regctl-linux-${{ matrix.arch }}" \
-            -o regctl
+          gh release download v0.11.5 --repo regclient/regclient --pattern "regctl-linux-${{ matrix.arch }}" --output regctl
           sudo install -m 0755 regctl /usr/local/bin/regctl
           regctl version
 
