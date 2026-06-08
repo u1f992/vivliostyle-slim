@@ -1,0 +1,176 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "*-[0-9]+"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/u1f992/vivliostyle-slim
+  CLI_REPO: vivliostyle/vivliostyle-cli
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      slim_version: ${{ steps.parse.outputs.slim_version }}
+      cli_ref: ${{ steps.parse.outputs.cli_ref }}
+      cli_version: ${{ steps.meta.outputs.cli_version }}
+      browser: ${{ steps.meta.outputs.browser }}
+    steps:
+      - name: Parse release version
+        id: parse
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          SLIM_VERSION="$RELEASE_VERSION"
+          case "$SLIM_VERSION" in
+            *-[0-9]*) ;;
+            *) echo "::error::'$SLIM_VERSION' is not <cli-ref>-<revision> (e.g. v11.0.0-1)"; exit 1 ;;
+          esac
+          # cli ref (used verbatim) + packaging revision, split on the final hyphen.
+          CLI_REF="${SLIM_VERSION%-*}"
+          REVISION="${SLIM_VERSION##*-}"
+          echo "slim_version=$SLIM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "cli_ref=$CLI_REF"           >> "$GITHUB_OUTPUT"
+          echo "Slim $SLIM_VERSION = cli ref '$CLI_REF' + packaging revision $REVISION"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Enforce immutability of the release tag
+        env:
+          SLIM_VERSION: ${{ steps.parse.outputs.slim_version }}
+        run: |
+          if docker manifest inspect "${IMAGE_NAME}:${SLIM_VERSION}" >/dev/null 2>&1; then
+            echo "::error::${IMAGE_NAME}:${SLIM_VERSION} already exists. Bump the packaging revision (e.g. -$(( ${SLIM_VERSION##*-} + 1 )))."
+            exit 1
+          fi
+          echo "${IMAGE_NAME}:${SLIM_VERSION} is free."
+
+      - name: Checkout vivliostyle-cli (metadata only)
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.CLI_REPO }}
+          ref: ${{ steps.parse.outputs.cli_ref }}
+          path: vivliostyle-cli
+
+      - name: Read cli version and extract browser
+        id: meta
+        working-directory: vivliostyle-cli
+        run: |
+          CLI_VERSION=$(jq -r '.version' package.json)
+          # Same extraction the upstream cd-workflow uses: the chrome entry of
+          # DEFAULT_BROWSER_VERSIONS in src/constants.ts, linux key.
+          BROWSER_VERSION=$(sed -n '/START DEFAULT_BROWSER_VERSIONS/,/END DEFAULT_BROWSER_VERSIONS/p' src/constants.ts \
+            | grep -oP 'chrome:\s*\K\{[^}]+\}' | jq -r '.linux')
+          echo "cli_version=$CLI_VERSION"       >> "$GITHUB_OUTPUT"
+          echo "browser=chrome@$BROWSER_VERSION" >> "$GITHUB_OUTPUT"
+          echo "cli_version=$CLI_VERSION  browser=chrome@$BROWSER_VERSION"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout slim build scripts
+        uses: actions/checkout@v6
+
+      - name: Checkout vivliostyle-cli
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.CLI_REPO }}
+          ref: ${{ needs.prepare.outputs.cli_ref }}
+          path: vivliostyle-cli
+
+      - name: Overlay slim build scripts onto the checkout
+        run: |
+          rm -rf vivliostyle-cli/slim
+          cp -a slim vivliostyle-cli/slim
+
+      - name: Build slim image into the local docker engine
+        env:
+          # build.sh only `docker import`s to this local tag -- it never pushes.
+          IMAGE_NAME: slim-local
+          TAG_NAME: ${{ matrix.arch }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          VS_CLI_VERSION: ${{ needs.prepare.outputs.cli_version }}
+          BROWSER: ${{ needs.prepare.outputs.browser }}
+        run: vivliostyle-cli/slim/build.sh
+
+      - name: Install regctl
+        run: |
+          curl -fsSL "https://github.com/regclient/regclient/releases/download/v0.11.5/regctl-linux-${{ matrix.arch }}" \
+            -o regctl
+          sudo install -m 0755 regctl /usr/local/bin/regctl
+          regctl version
+
+      - name: Push image by digest (untagged)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # GHCR has no "remove tag, keep manifest", so per-arch images are pushed
+          # addressed only by digest. They become untagged versions the index
+          # references -- no per-arch tag is ever created.
+          docker save "slim-local:${{ matrix.arch }}" -o image.tar
+          printf '%s' "$GH_TOKEN" | regctl registry login ghcr.io \
+            --user "${{ github.actor }}" --pass-stdin
+          regctl image import "ocidir://layout:img" image.tar
+          DIGEST="$(regctl image digest "ocidir://layout:img")"
+          regctl image copy "ocidir://layout:img" "${IMAGE_NAME}@${DIGEST}"
+          mkdir -p digests
+          printf '%s' "$DIGEST" > "digests/${{ matrix.arch }}"
+          echo "Pushed ${IMAGE_NAME}@${DIGEST} (${{ matrix.arch }}, untagged)"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digests/${{ matrix.arch }}
+          if-no-files-found: error
+
+  manifest:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Assemble multi-arch manifest
+        env:
+          SLIM_VERSION: ${{ needs.prepare.outputs.slim_version }}
+        run: |
+          AMD64="$(cat digests/amd64)"
+          ARM64="$(cat digests/arm64)"
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.version=${SLIM_VERSION}" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            -t "${IMAGE_NAME}:${SLIM_VERSION}" \
+            "${IMAGE_NAME}@${AMD64}" "${IMAGE_NAME}@${ARM64}"
+          docker buildx imagetools inspect "${IMAGE_NAME}:${SLIM_VERSION}"
