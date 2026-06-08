@@ -9,6 +9,8 @@ $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
 $ git checkout FETCH_HEAD -- image-contract.sh slim
 ```
 
+> NOTE: build-rootfs.sh is temporarily not a verbatim copy. See [c12f8c5](https://github.com/u1f992/vivliostyle-slim/commit/c12f8c54caad8930cf1d354afdc3e324d78f51ae).
+
 The tag convention is `<cli-ref>-<rev>`. `<cli-ref>` selects a specific commit of Vivliostyle CLI, given as either a tag or a full SHA. Mechanically, the run of digits after the final `-` is `<rev>`. Every `<cli-ref>-<rev>` pair is unique; no moving tags such as `latest` or `11` are published.
 
 ## Local build
