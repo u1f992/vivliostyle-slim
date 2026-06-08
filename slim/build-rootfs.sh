@@ -29,7 +29,7 @@ apt-get install --yes --no-install-recommends --quiet=2 \
 # keyring into the target rootfs.
 curl --fail --silent --show-error --location https://deb.nodesource.com/setup_24.x --output /tmp/nodesource_setup.sh
 bash /tmp/nodesource_setup.sh >/dev/null
-apt-get install --yes --no-install-recommends --quiet=2 nodejs >/dev/null
+apt-get install --yes --no-install-recommends --quiet=2 nodejs=24.15.0-1nodesource1 >/dev/null
 
 # slim/ is excluded along with the .dockerignore set: its generated rootfs.tar
 # would otherwise recurse into the copy.
@@ -213,7 +213,7 @@ mmdebstrap \
     --include="dash bash coreutils diffutils libc-bin perl-base debconf sed grep init-system-helpers util-linux mawk \
         base-files base-passwd findutils \
         apt \
-        nodejs \
+        nodejs=24.15.0-1nodesource1 \
         ca-certificates \
         ghostscript poppler-utils xz-utils \
         fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-cjk-extra \
