@@ -21,15 +21,18 @@ export TZ="${TZ:-Asia/Tokyo}"
 USER_UID="${USER_UID:-1000}"
 USER_GID="${USER_GID:-1000}"
 
+# unzip / xz-utils are required by @puppeteer/browsers to extract the
+# downloaded browser archives.
 apt-get update --quiet=2
 apt-get install --yes --no-install-recommends --quiet=2 \
-    ca-certificates curl fakechroot fakeroot mmdebstrap arch-test >/dev/null
+    ca-certificates curl fakechroot fakeroot mmdebstrap arch-test \
+    unzip xz-utils >/dev/null
 
 # Run NodeSource's setup script here so we can copy its sources list and
 # keyring into the target rootfs.
 curl --fail --silent --show-error --location https://deb.nodesource.com/setup_24.x --output /tmp/nodesource_setup.sh
 bash /tmp/nodesource_setup.sh >/dev/null
-apt-get install --yes --no-install-recommends --quiet=2 nodejs=24.15.0-1nodesource1 >/dev/null
+apt-get install --yes --no-install-recommends --quiet=2 nodejs >/dev/null
 
 # slim/ is excluded along with the .dockerignore set: its generated rootfs.tar
 # would otherwise recurse into the copy.
@@ -213,9 +216,9 @@ mmdebstrap \
     --include="dash bash coreutils diffutils libc-bin perl-base debconf sed grep init-system-helpers util-linux mawk \
         base-files base-passwd findutils \
         apt \
-        nodejs=24.15.0-1nodesource1 \
+        nodejs \
         ca-certificates \
-        ghostscript poppler-utils xz-utils \
+        ghostscript poppler-utils xz-utils unzip \
         fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-cjk-extra \
         $BROWSER_PACKAGES" \
     --customize-hook='mkdir --parents "$1/opt" "$1/data" "$1/home/vivliostyle" "$1/usr/lib/node_modules" "$1/usr/local/bin" "$1/etc/fonts"' \

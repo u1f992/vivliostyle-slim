@@ -47,7 +47,7 @@ for d in /opt/puppeteer/firefox/*/firefox \
 done
 add_seed /usr/bin/gs /usr/bin/pdftops /usr/bin/pdfinfo
 add_seed /usr/bin/fc-list /usr/bin/fc-match /usr/bin/fc-cache /usr/bin/fc-query
-add_seed /usr/bin/xz /usr/bin/tar
+add_seed /usr/bin/unzip /usr/bin/xz /usr/bin/tar
 add_seed /usr/bin/apt /usr/bin/apt-get /usr/bin/apt-cache \
          /usr/bin/dpkg /usr/bin/dpkg-deb /usr/bin/dpkg-query
 add_seed /usr/local/bin/vivliostyle /usr/local/bin/vs
