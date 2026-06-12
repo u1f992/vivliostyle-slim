@@ -11,6 +11,23 @@ $ git checkout FETCH_HEAD -- image-contract.sh slim
 
 The tag convention is `<cli-ref>-<rev>`. `<cli-ref>` selects a specific commit of Vivliostyle CLI, given as either a tag or a full SHA. Mechanically, the run of digits after the final `-` is `<rev>`. Every `<cli-ref>-<rev>` pair is unique; no moving tags such as `latest` or `11` are published.
 
+## Derived images
+
+The slim build force-purges install-time-only packages, deliberately leaving dpkg broken. Extending the image with `apt-get install` first requires a repair that undoes most of the slim tuning:
+
+```dockerfile
+FROM ghcr.io/u1f992/vivliostyle-slim:<tag>
+USER root
+RUN apt-get update \
+ && apt-get download perl-base \
+ && dpkg --install --force-depends perl-base_*.deb \
+ && rm --force perl-base_*.deb \
+ && apt-get install --fix-broken --yes --no-install-recommends \
+ && apt-get install --yes --no-install-recommends <packages> \
+ && rm --recursive --force /var/lib/apt/lists/*
+USER vivliostyle
+```
+
 ## Local build
 
 Build a single-arch image into the local docker engine as `vivliostyle-slim:local`:
