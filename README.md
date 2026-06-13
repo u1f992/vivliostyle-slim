@@ -28,6 +28,8 @@ RUN apt-get update \
 USER vivliostyle
 ```
 
+Re-slimming a derived image inherently means redoing the manual curation that went into the vivliostyle-slim image itself. Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
+
 ## Local build
 
 Build a single-arch image into the local docker engine as `vivliostyle-slim:local`:
