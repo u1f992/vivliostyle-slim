@@ -36,8 +36,14 @@ docker run --rm --entrypoint cat debian:trixie-slim /etc/dpkg/dpkg.cfg.d/docker 
 # `--env VAR` (no value) only forwards VAR if it is set in the caller's
 # environment. Unset vars stay unset inside the container, so build-rootfs.sh
 # decides defaults and required-checks on its own.
+#
+# mmdebstrap bind-mounts /proc, /sys and /dev into the chroot for the package
+# maintainer scripts. Those mounts need CAP_SYS_ADMIN, and docker's default
+# AppArmor profile (docker-default) also blocks mounting sysfs and devpts.
 docker run --rm \
     --platform="linux/${TARGET_ARCH}" \
+    --cap-add=SYS_ADMIN \
+    --security-opt apparmor=unconfined \
     --mount type=bind,source="$script_dir",target=/slim \
     --mount type=bind,source="$repo_root/build",target=/repo-build,readonly \
     --mount type=bind,source="$repo_root",target=/repo,readonly \

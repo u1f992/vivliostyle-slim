@@ -147,9 +147,6 @@ cd /slim
 rm --force rootfs.tar
 
 mmdebstrap \
-    `# Real chroot. fakeroot uses LD_PRELOAD which silently breaks ld.so's` \
-    `# RUNPATH resolution, so systemd binaries can't find libsystemd-shared.` \
-    --mode=root \
     --format=tar \
     --variant=custom \
     --architectures="$TARGET_ARCH" \
