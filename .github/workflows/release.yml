@@ -88,7 +88,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout slim build scripts
+      - name: Checkout slim Dockerfile + tooling
         uses: actions/checkout@v6
 
       - name: Checkout vivliostyle-cli
@@ -98,42 +98,45 @@ jobs:
           ref: ${{ needs.prepare.outputs.cli_ref }}
           path: vivliostyle-cli
 
-      - name: Overlay slim build scripts onto the checkout
+      - name: Overlay the slim Dockerfile + tooling onto the checkout
         run: |
+          cp -a Dockerfile .dockerignore image-contract.sh vivliostyle-cli/
           rm -rf vivliostyle-cli/slim
           cp -a slim vivliostyle-cli/slim
 
-      - name: Build slim image into the local docker engine
-        env:
-          # build.sh only `docker import`s to this local tag -- it never pushes.
-          IMAGE_NAME: slim-local
-          TAG_NAME: ${{ matrix.arch }}
-          TARGET_ARCH: ${{ matrix.arch }}
-          VS_CLI_VERSION: ${{ needs.prepare.outputs.cli_version }}
-          BROWSER: ${{ needs.prepare.outputs.browser }}
-        run: vivliostyle-cli/slim/build.sh
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
-      - name: Install regctl
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download v0.11.5 --repo regclient/regclient --pattern "regctl-linux-${{ matrix.arch }}" --output regctl
-          sudo install -m 0755 regctl /usr/local/bin/regctl
-          regctl version
+      - name: Set up Buildx with the security.insecure entitlement
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          buildkitd-flags: --allow-insecure-entitlement security.insecure
 
-      - name: Push image by digest (untagged)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Build and push by digest (untagged)
         run: |
-          # GHCR has no "remove tag, keep manifest", so per-arch images are pushed
-          # addressed only by digest. They become untagged versions the index
-          # references -- no per-arch tag is ever created.
-          docker save "slim-local:${{ matrix.arch }}" -o image.tar
-          printf '%s' "$GH_TOKEN" | regctl registry login ghcr.io \
-            --user "${{ github.actor }}" --pass-stdin
-          regctl image import "ocidir://layout:img" image.tar
-          DIGEST="$(regctl image digest "ocidir://layout:img")"
-          regctl image copy "ocidir://layout:img" "${IMAGE_NAME}@${DIGEST}"
+          # mmdebstrap runs a real root chroot and bind-mounts /proc,/sys,/dev for
+          # the package maintainer scripts, which needs CAP_SYS_ADMIN + an
+          # unconfined profile. The Dockerfile's `RUN --security=insecure` supplies
+          # that, gated by the builder's --allow-insecure-entitlement above and the
+          # --allow flag here.
+          #
+          # push-by-digest pushes an untagged, digest-only manifest -- GHCR has no
+          # "remove tag, keep manifest", so per-arch images are never tagged; the
+          # index assembled in the manifest job references them by digest.
+          docker buildx build \
+            --platform "linux/${{ matrix.arch }}" \
+            --allow security.insecure \
+            --build-arg VS_CLI_VERSION=${{ needs.prepare.outputs.cli_version }} \
+            --build-arg BROWSER=${{ needs.prepare.outputs.browser }} \
+            --output "type=image,name=${IMAGE_NAME},push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file "${RUNNER_TEMP}/metadata.json" \
+            vivliostyle-cli
+          DIGEST="$(jq -r '."containerimage.digest"' "${RUNNER_TEMP}/metadata.json")"
           mkdir -p digests
           printf '%s' "$DIGEST" > "digests/${{ matrix.arch }}"
           echo "Pushed ${IMAGE_NAME}@${DIGEST} (${{ matrix.arch }}, untagged)"

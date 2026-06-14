@@ -7,7 +7,7 @@ set -u
 # image-contract.sh exercises chrome / chromium / firefox installs via
 # the CLI. The bundle ships one; install the others now so their .so
 # trees feed the ldd closure below and the closure-derived keep set
-# protects them from the build-rootfs.sh purge.
+# protects them from the Dockerfile's purge.
 arch=$(dpkg --print-architecture)
 if [ "$arch" = "amd64" ] && [ ! -d /opt/puppeteer/chromium ]; then
     /opt/vivliostyle-cli/node_modules/.bin/browsers install chromium \

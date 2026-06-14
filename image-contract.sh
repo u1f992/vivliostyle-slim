@@ -167,7 +167,7 @@ check_browser_present() {
     # @puppeteer/browsers lays binaries at /opt/puppeteer/<browser>/<version>/<dir>/<binary>
     # (e.g. chrome/<v>/chrome-linux64/chrome, firefox/<v>/firefox/firefox,
     # chrome-headless-shell/<v>/chrome-headless-shell-linux64/chrome-headless-shell).
-    # build-rootfs.sh accepts an arbitrary BROWSER value, so probe for any of
+    # the Dockerfile accepts an arbitrary BROWSER value, so probe for any of
     # the binaries @puppeteer/browsers can drop here rather than hard-coding chrome.
     in_image '
         if [ "$(dpkg --print-architecture)" = "amd64" ]; then

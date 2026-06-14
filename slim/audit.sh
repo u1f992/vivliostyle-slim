@@ -2,7 +2,7 @@
 # Audit tool: list packages in the slim image that aren't in the runtime
 # closure (i.e. purge candidates).
 #
-# This is how the purge list in slim/build-rootfs.sh was derived. It's
+# This is how the purge list in the Dockerfile was derived. It's
 # not part of the image build -- the build hard-codes the hand-vetted
 # subset, and per-candidate rationale lives there next to dpkg --purge.
 # Re-run when Debian bumps a major release, when a new dependency lands

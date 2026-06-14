@@ -1,0 +1,20 @@
+# Build context for the slim Dockerfile. The builder stage does `COPY . /src`,
+# so this list must prune everything the former build-rootfs.sh excluded from its
+# worktree copy (.git, node_modules, slim) plus the build-time-only trees. Editing
+# it also changes what the Docker build sees, not just what npm publishes.
+node_modules/
+.envrc
+.env
+tests/
+examples/
+coverage/
+.github/
+dist/
+.git/
+slim/
+Dockerfile
+.dockerignore
+image-contract.sh
+*.md
+.changeset/
+.husky/
