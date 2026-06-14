@@ -2,11 +2,11 @@
 
 Pilot release of [vivliostyle/vivliostyle-cli#793](https://github.com/vivliostyle/vivliostyle-cli/pull/793)
 
-`Dockerfile`, `.dockerignore`, `image-contract.sh` and everything under `slim/` are verbatim copies from the PR. Sync them from the PR head with:
+`Dockerfile`, `image-contract.sh`, `build/prune-foreign.ts` and everything under `slim/` are verbatim copies from the PR. Sync them from the PR head with:
 
 ```shellsession
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile .dockerignore image-contract.sh slim
+$ git checkout FETCH_HEAD -- Dockerfile image-contract.sh slim build/prune-foreign.ts
 ```
 
 The tag convention is `<cli-ref>-<rev>`. `<cli-ref>` selects a specific commit of Vivliostyle CLI, given as either a tag or a full SHA. Mechanically, the run of digits after the final `-` is `<rev>`. Every `<cli-ref>-<rev>` pair is unique; no moving tags such as `latest` or `11` are published.
@@ -32,19 +32,14 @@ Re-slimming a derived image inherently means redoing the manual curation that we
 
 ## Local build
 
-The image is built from the repo-root `Dockerfile`. Its mmdebstrap step runs a
-real root chroot and bind-mounts `/proc`, `/sys`, `/dev` for the package
-maintainer scripts, which needs `CAP_SYS_ADMIN` and an unconfined profile —
-BuildKit exposes that to a `RUN` only through `--security=insecure`. So build
-with a `docker-container` builder that allows the entitlement.
-
 Build a single-arch image into the local docker engine as `vivliostyle-slim:local`:
 
 ```shellsession
 $ git clone https://github.com/vivliostyle/vivliostyle-cli
-$ cp -a Dockerfile .dockerignore image-contract.sh vivliostyle-cli/
+$ cp -a Dockerfile image-contract.sh vivliostyle-cli/
 $ rm -rf vivliostyle-cli/slim
 $ cp -a slim vivliostyle-cli/slim
+$ cp -a build/*.ts vivliostyle-cli/build/
 $ cd vivliostyle-cli
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
@@ -56,3 +51,24 @@ $ docker buildx build \
 ```
 
 `image-contract.sh` captures the behavior that the upstream container and the slim container must implement alike. Run the contract check against that image with `IMAGE=vivliostyle-slim:local ./image-contract.sh`.
+
+show gui on host x server
+
+linux
+
+```shellsession
+$ xhost
+access control enabled, only authorized clients can connect
+$ xhost +SI:localuser:$(id -un)
+localuser:mukai being added to access control list
+$ xhost
+access control enabled, only authorized clients can connect
+SI:localuser:mukai
+
+$ docker run --rm --interactive --tty --env DISPLAY --user "$(id -u):$(id -g)" --volume /tmp/.X11-unix:/tmp/.X11-unix vivliostyle-slim:local preview
+
+$ xhost -SI:localuser:$(id -un)
+localuser:mukai being removed from access control list
+$ xhost
+access control enabled, only authorized clients can connect
+```

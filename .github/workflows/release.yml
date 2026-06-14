@@ -100,9 +100,12 @@ jobs:
 
       - name: Overlay the slim Dockerfile + tooling onto the checkout
         run: |
-          cp -a Dockerfile .dockerignore image-contract.sh vivliostyle-cli/
+          # .dockerignore is not overlaid: the CLI checkout ships its own.
+          cp -a Dockerfile image-contract.sh vivliostyle-cli/
           rm -rf vivliostyle-cli/slim
           cp -a slim vivliostyle-cli/slim
+          # Merge our build/ assets into the CLI's existing build/ (keeps fonts.conf).
+          cp -a build/*.ts vivliostyle-cli/build/
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
