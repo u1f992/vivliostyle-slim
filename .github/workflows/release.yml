@@ -105,7 +105,7 @@ jobs:
           rm -rf vivliostyle-cli/slim
           cp -a slim vivliostyle-cli/slim
           # Merge our build/ assets into the CLI's existing build/ (keeps fonts.conf).
-          cp -a build/*.ts vivliostyle-cli/build/
+          cp -a build/*.ts build/essential-packages.txt vivliostyle-cli/build/
 
       - name: Log in to GHCR
         uses: docker/login-action@v4

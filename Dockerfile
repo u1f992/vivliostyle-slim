@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
-# Inherit debian:trixie-slim's include/exclude configuration
-FROM debian:trixie-slim AS dpkg-excludes
-RUN sed 's/^\(path-\(include\|exclude\)\) /\1=/' /etc/dpkg/dpkg.cfg.d/docker > /tmp/trixie-slim.conf
+# Inherit debian:13-slim's include/exclude configuration
+FROM debian:13-slim AS dpkg-excludes
+RUN sed 's/^\(path-\(include\|exclude\)\) /\1=/' /etc/dpkg/dpkg.cfg.d/docker > /tmp/debian-13-slim.conf
 
-FROM debian:trixie AS builder
+FROM debian:13 AS builder
 
 # BuildKit automatic platform ARGs
 ARG TARGETARCH
@@ -87,9 +87,13 @@ RUN mkdir /tmp/puppeteer \
       # see https://gitlab.alpinelinux.org/alpine/aports/-/blob/v3.23.4/community/chromium/APKBUILD#L983-984
      && { find /tmp/puppeteer/chrome/linux-*/chrome-*/locales -name '*.pak' ! -name 'en-US*.pak' -delete || true; }; \
     fi \
- && printf '%s' "$(node /tmp/vs-src/build/browser-deps.ts "${distro}")${browser:+ ${browser}}" > /tmp/browser-packages
+ # @puppeteer/browsers' install-deps is unusable here: it reads a deb.deps file that
+ # ships only with Chrome for Testing, so use Playwright's nativeDeps table instead.
+ # see https://github.com/puppeteer/puppeteer/blob/browsers-v3.0.4/packages/browsers/src/install.ts#L306-L345
+ && curl --fail --location https://raw.githubusercontent.com/microsoft/playwright/v1.60.0/packages/playwright-core/src/server/registry/nativeDeps.ts --output /tmp/nativeDeps.ts \
+ && printf '%s' "$(node --input-type=module --eval "const { deps } = await import('/tmp/nativeDeps.ts'); const e = deps['${distro}']; process.stdout.write([...new Set([...e.chromium, ...e.firefox])].join(' '))")${browser:+ ${browser}}" > /tmp/browser-dependencies.txt
 
-COPY --from=dpkg-excludes /tmp/trixie-slim.conf /tmp/trixie-slim.conf
+COPY --from=dpkg-excludes /tmp/debian-13-slim.conf /tmp/debian-13-slim.conf
 
 # Assemble the rootfs with mmdebstrap
 # BuildKit can only grant the needed privilege at the coarse granularity of
@@ -98,63 +102,48 @@ COPY --from=dpkg-excludes /tmp/trixie-slim.conf /tmp/trixie-slim.conf
 # mmdebstrap bind-mounts /proc, /sys and /dev into the chroot for the package
 # maintainer scripts. Those mounts need CAP_SYS_ADMIN, and docker's default
 # AppArmor profile (docker-default) also blocks mounting sysfs and devpts.
-RUN --security=insecure mmdebstrap \
+RUN --security=insecure \
+    ESSENTIAL="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' /tmp/vs-src/build/essential-packages.txt)" \
+ && mmdebstrap \
       --format=dir \
       --variant=custom \
-      --dpkgopt=/tmp/trixie-slim.conf \
+      --dpkgopt=/tmp/debian-13-slim.conf \
       # NodeSource ships headers for native module compilation
       --dpkgopt='path-exclude=/usr/include/*' \
       # adduser's postinst expects /run/adduser as its lockfile location
-      --setup-hook='mkdir --parents "$1/run"' \
+      --setup-hook='mkdir "$1/run"' \
       # Set up the NodeSource apt repo
       # see https://github.com/nodesource/distributions/blob/c6e581b0d24e5d043476ddb947d70e6fe10e83c9/scripts/deb/setup_24.x
-      --setup-hook='mkdir --parents "$1/usr/share/keyrings" "$1/etc/apt/sources.list.d" "$1/etc/apt/preferences.d"' \
-      --setup-hook='cp /usr/share/keyrings/nodesource.gpg "$1/usr/share/keyrings/"' \
-      --setup-hook='cp /etc/apt/sources.list.d/nodesource.sources "$1/etc/apt/sources.list.d/"' \
-      --setup-hook='cp /etc/apt/preferences.d/nodejs "$1/etc/apt/preferences.d/"' \
-      # dpkg-postinst helpers. With --variant=custom the rootfs starts empty,
-      # so anything a postinst expects in PATH must be listed explicitly. Each
-      # line names a concrete consumer from our installed set (grep over
-      # /var/lib/dpkg/info/*.postinst inside the resulting rootfs).
-      # dash:      */.postinst start with #!/bin/sh (adduser/dbus/dpkg/..., nearly all).
-      # bash:      /usr/bin/ldd is a #!/bin/bash script and usrmerge's postinst
-      #            execs 'ldd /bin/cp'.
-      # coreutils: rm/cp/ln/mv/mkdir invoked by every nontrivial postinst.
-      # diffutils: xz-utils postinst calls diff for conffile management.
-      # libc-bin:  libc6 postinst calls ldconfig.
-      # perl-base: debconf's /usr/share/debconf/frontend is Perl, sourced via
-      #            confmodule by ca-certificates / fontconfig-config / libpaper2 / ...
-      # debconf:   base-passwd / ca-certificates / fontconfig-config / libpaper2 /
-      #            libpam-* / tzdata / x11-common call db_input or db_get at configure.
-      # sed:       ca-certificates / libpam-* / login.defs / python3.13 postinst use sed.
-      # grep:      ca-certificates / dbus / passwd / procps / python3.13 / xz-utils
-      #            postinst call grep, and image-contract.sh greps the output of
-      #            'command -v vivliostyle'.
-      # init-system-helpers: dbus / dirmngr / dpkg / gpg / gpg-agent / procps /
-      #                      util-linux / x11-common postinst call update-rc.d.
-      # util-linux: base-passwd / fontconfig / libpam-runtime / systemd postinst
-      #             call util-linux commands (chown via runuser, blkid, ipcs, etc.).
-      # mawk:      libpam-runtime / libpam0g / python3.13-minimal postinst call awk.
-      # base-files: ships /bin, /etc, /var, ... as the root filesystem skeleton.
-      # base-passwd: writes /etc/passwd and /etc/group with root and daemon users;
-      #            without it pwck and 'chown root:root' fail.
-      # findutils: libgdk-pixbuf-2.0-0 postinst (gdk-pixbuf-query-loaders) calls find.
-      # apt: derived images extend with 'FROM ...slim RUN apt-get install <pkg>'
-      # (image-contract.sh's check_apt enforces this). apt is also the recovery
-      # path for the install-time helpers purged below: if anything ever needs
-      # debconf / perl-base / diffutils / mawk / init-system-helpers, a user can
-      # pull them back with 'apt-get install <pkg>'.
-      --include="dash bash coreutils diffutils libc-bin perl-base debconf sed grep init-system-helpers util-linux mawk \
-        base-files base-passwd findutils \
+      --setup-hook=' \
+        mkdir --parents "$1/usr/share/keyrings" "$1/etc/apt/sources.list.d" "$1/etc/apt/preferences.d" \
+     && cp /usr/share/keyrings/nodesource.gpg "$1/usr/share/keyrings/" \
+     && cp /etc/apt/sources.list.d/nodesource.sources "$1/etc/apt/sources.list.d/" \
+     && cp /etc/apt/preferences.d/nodejs "$1/etc/apt/preferences.d/"' \
+      --include="$ESSENTIAL \
+        # ---
+        # groupadd/useradd for the user-creation hook below.
+        passwd \
+        # recovery point for derived images
         apt \
+        # Chrome / Firefox requirements
+        $(cat /tmp/browser-dependencies.txt) \
+        # Vivliostyle CLI requirements
         nodejs \
-        ghostscript poppler-utils xz-utils unzip \
-        $(apt-cache show fonts-noto | sed -nE 's/^(Depends|Recommends): //p') \
-        $(cat /tmp/browser-packages)" \
-      --customize-hook='mkdir --parents "$1/opt" "$1/data" "$1/home/vivliostyle" "$1/usr/lib/node_modules" "$1/usr/local/bin" "$1/etc/fonts"' \
-      --customize-hook="printf 'vivliostyle:x:${USER_UID}:${USER_GID}:vivliostyle:/home/vivliostyle:/bin/bash\n' >> \"\$1/etc/passwd\"" \
-      --customize-hook="printf 'vivliostyle:x:${USER_GID}:\n' >> \"\$1/etc/group\"" \
-      --customize-hook="printf 'vivliostyle:!:19000:0:99999:7:::\n' >> \"\$1/etc/shadow\"" \
+        # press-ready requirements
+        ghostscript \
+        poppler-utils \
+        # @puppeteer/browsers requirements
+        unzip \
+        xz-utils \
+        # TODO: should such a large font set be bundled into the image?
+        # see https://github.com/vivliostyle/vivliostyle-cli/blob/v11.0.2/Dockerfile#L42-L43
+        $(apt-cache show fonts-noto | sed -nE 's/^(Depends|Recommends): //p')" \
+      --customize-hook='mkdir --parents "$1/opt" "$1/data" "$1/usr/lib/node_modules" "$1/usr/local/bin" "$1/etc/fonts"' \
+      # Create the runtime user
+      --customize-hook=" \
+        chroot \"\$1\" groupadd --gid ${USER_GID} vivliostyle \
+     && chroot \"\$1\" useradd --uid ${USER_UID} --gid vivliostyle --home /home/vivliostyle --no-create-home vivliostyle \
+     && mkdir \"\$1/home/vivliostyle\"" \
       --customize-hook='copy-in /tmp/vivliostyle-cli /opt/' \
       --customize-hook='copy-in /usr/lib/node_modules/pnpm /usr/lib/node_modules/' \
       # Rename fonts.conf -> local.conf during the copy. copy-in can't do this:
