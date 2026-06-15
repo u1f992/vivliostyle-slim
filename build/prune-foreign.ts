@@ -1,18 +1,14 @@
-// @ts-expect-error standalone script, @types/node is missing
-import fs from "node:fs";
-// @ts-expect-error standalone script, @types/node is missing
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
-const [arch, packageJsonPath] =
-  // @ts-expect-error standalone script, @types/node is missing
-  (process.argv as string[]).slice(2);
+const [arch, packageJsonPath] = process.argv.slice(2);
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null;
+  typeof v === 'object' && v !== null;
 
 const isList = (v: unknown): v is string | string[] =>
-  typeof v === "string" ||
-  (Array.isArray(v) && v.every((c) => typeof c === "string"));
+  typeof v === 'string' ||
+  (Array.isArray(v) && v.every((c) => typeof c === 'string'));
 
 // prettier-ignore
 /**
@@ -76,15 +72,15 @@ const checkList = (value: string, list: string | string[]) => {
 
 let pkg: unknown;
 try {
-  pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+  pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 } catch {}
 if (
   isRecord(pkg) &&
   !(
-    (!isList(pkg.os) || checkList("linux", pkg.os)) &&
+    (!isList(pkg.os) || checkList('linux', pkg.os)) &&
     (!isList(pkg.cpu) ||
-      checkList(arch === "arm64" ? "arm64" : "x64", pkg.cpu)) &&
-    (!isList(pkg.libc) || checkList("glibc", pkg.libc))
+      checkList(arch === 'arm64' ? 'arm64' : 'x64', pkg.cpu)) &&
+    (!isList(pkg.libc) || checkList('glibc', pkg.libc))
   )
 ) {
   fs.rmSync(path.dirname(packageJsonPath), { recursive: true, force: true });
