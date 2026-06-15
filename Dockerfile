@@ -11,8 +11,8 @@ ARG TARGETARCH
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TZ=Asia/Tokyo
-ARG USER_UID=1000
 ARG USER_GID=1000
+ARG USER_UID=1000
 
 ARG BROWSER
 RUN test -n "$BROWSER"
@@ -175,4 +175,4 @@ ENV LC_ALL=C.UTF-8
 ENV PATH=/opt/vivliostyle-cli/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 USER vivliostyle
 WORKDIR /data
-ENTRYPOINT ["vivliostyle"]
+ENTRYPOINT [ "vivliostyle" ]
