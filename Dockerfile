@@ -9,21 +9,15 @@ FROM debian:13 AS builder
 # BuildKit automatic platform ARGs
 ARG TARGETARCH
 
-ARG VS_CLI_VERSION
-ARG BROWSER
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TZ=Asia/Tokyo
 ARG USER_UID=1000
 ARG USER_GID=1000
-ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
-ENV TZ=${TZ}
 
-RUN test "${VS_CLI_VERSION}" \
- && test "${BROWSER}" \
- && case "${TARGETARCH}" in \
-      amd64|arm64) ;; \
-      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac
+ARG BROWSER
+RUN test -n "$BROWSER"
+ARG VS_CLI_VERSION
+RUN test -n "$VS_CLI_VERSION"
 
 RUN apt-get update \
  && apt-get install --yes --no-install-recommends \
