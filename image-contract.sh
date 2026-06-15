@@ -161,6 +161,10 @@ check_noto_cjk_font_installed() {
     in_image 'fc-list | grep --quiet --ignore-case "Noto Serif CJK JP"'
 }
 
+check_font_file_loadable() {
+    in_image "fc-list | grep --quiet --fixed-strings '$1'"
+}
+
 # --- browser ------------------------------------------------------------
 
 check_browser_present() {
@@ -398,6 +402,16 @@ run_test "xz available (Firefox/.tar.xz extraction)"       check_xz
 run_test "unzip available (Chrome/.zip extraction)"        check_unzip
 run_test "/etc/fonts/local.conf has Noto CJK aliases"      check_fonts_conf_noto_aliases
 run_test "Noto CJK JP font is installed"                   check_noto_cjk_font_installed
+
+echo "[fonts: full Noto set]"
+run_test "fonts-noto-core loadable (NotoSans-Regular.ttf)"            check_font_file_loadable NotoSans-Regular.ttf
+run_test "fonts-noto-cjk loadable (NotoSansCJK-Regular.ttc)"          check_font_file_loadable NotoSansCJK-Regular.ttc
+run_test "fonts-noto-cjk-extra loadable (NotoSansCJK-Thin.ttc)"       check_font_file_loadable NotoSansCJK-Thin.ttc
+run_test "fonts-noto-color-emoji loadable (NotoColorEmoji.ttf)"       check_font_file_loadable NotoColorEmoji.ttf
+run_test "fonts-noto-extra loadable (NotoKufiArabic-Black.ttf)"       check_font_file_loadable NotoKufiArabic-Black.ttf
+run_test "fonts-noto-mono loadable (NotoMono-Regular.ttf)"            check_font_file_loadable NotoMono-Regular.ttf
+run_test "fonts-noto-ui-core loadable (NotoLoopedLaoUI-Bold.ttf)"     check_font_file_loadable NotoLoopedLaoUI-Bold.ttf
+run_test "fonts-noto-ui-extra loadable (NotoLoopedLaoUI-Black.ttf)"   check_font_file_loadable NotoLoopedLaoUI-Black.ttf
 
 echo "[browser]"
 run_test "Bundled browser binary is present"               check_browser_present

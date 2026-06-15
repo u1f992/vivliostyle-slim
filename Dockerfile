@@ -106,16 +106,8 @@ RUN --security=insecure mmdebstrap \
       --dpkgopt='path-exclude=/usr/include/*' \
       # adduser's postinst expects /run/adduser as its lockfile location
       --setup-hook='mkdir --parents "$1/run"' \
-      # Replicate the three files that deb.nodesource.com/setup_*.x writes when
-      # adding the NodeSource apt repo: the GPG keyring, the deb822 sources list,
-      # and the apt-pinning preferences. We already ran the setup script in the
-      # builder stage above, so these files exist on its filesystem; copy them
-      # into the same paths inside the target rootfs so apt can resolve 'nodejs'
-      # from NodeSource when --include processes it.
-      # Source: nodesource/distributions @c6e581b0d24e5d043476ddb947d70e6fe10e83c9
-      #   scripts/deb/setup_24.x L64 (nodesource.gpg)
-      #   scripts/deb/setup_24.x L83 (nodesource.sources)
-      #   scripts/deb/setup_24.x L98 (preferences.d/nodejs)
+      # Set up the NodeSource apt repo
+      # see https://github.com/nodesource/distributions/blob/c6e581b0d24e5d043476ddb947d70e6fe10e83c9/scripts/deb/setup_24.x
       --setup-hook='mkdir --parents "$1/usr/share/keyrings" "$1/etc/apt/sources.list.d" "$1/etc/apt/preferences.d"' \
       --setup-hook='cp /usr/share/keyrings/nodesource.gpg "$1/usr/share/keyrings/"' \
       --setup-hook='cp /etc/apt/sources.list.d/nodesource.sources "$1/etc/apt/sources.list.d/"' \
@@ -156,9 +148,8 @@ RUN --security=insecure mmdebstrap \
         base-files base-passwd findutils \
         apt \
         nodejs \
-        ca-certificates \
         ghostscript poppler-utils xz-utils unzip \
-        fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-cjk-extra \
+        $(apt-cache show fonts-noto | sed -nE 's/^(Depends|Recommends): //p') \
         $(cat /tmp/browser-packages)" \
       --customize-hook='mkdir --parents "$1/opt" "$1/data" "$1/home/vivliostyle" "$1/usr/lib/node_modules" "$1/usr/local/bin" "$1/etc/fonts"' \
       --customize-hook="printf 'vivliostyle:x:${USER_UID}:${USER_GID}:vivliostyle:/home/vivliostyle:/bin/bash\n' >> \"\$1/etc/passwd\"" \
