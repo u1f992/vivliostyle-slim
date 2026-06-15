@@ -118,15 +118,13 @@ RUN --security=insecure \
      && cp /etc/apt/sources.list.d/nodesource.sources "$1/etc/apt/sources.list.d/" \
      && cp /etc/apt/preferences.d/nodejs "$1/etc/apt/preferences.d/"' \
       --include="$ESSENTIAL \
-        # ---
         # groupadd/useradd for the user-creation hook below.
         passwd \
         # recovery point for derived images
         apt \
-        # Chrome / Firefox requirements
-        $(cat /tmp/browser-dependencies.txt) \
-        # Vivliostyle CLI requirements
+        # ---
         nodejs \
+        $(cat /tmp/browser-dependencies.txt) \
         # press-ready requirements
         ghostscript \
         poppler-utils \
@@ -137,7 +135,6 @@ RUN --security=insecure \
         # see https://github.com/vivliostyle/vivliostyle-cli/blob/v11.0.2/Dockerfile#L42-L43
         $(apt-cache show fonts-noto | sed -nE 's/^(Depends|Recommends): //p')" \
       --customize-hook='mkdir --parents "$1/opt" "$1/data" "$1/usr/lib/node_modules" "$1/usr/local/bin" "$1/etc/fonts"' \
-      # Create the runtime user
       --customize-hook=" \
         chroot \"\$1\" groupadd --gid ${USER_GID} vivliostyle \
      && chroot \"\$1\" useradd --uid ${USER_UID} --gid vivliostyle --home /home/vivliostyle --no-create-home vivliostyle \
