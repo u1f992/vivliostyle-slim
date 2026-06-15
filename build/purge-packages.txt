@@ -1,9 +1,9 @@
 # Install-time-only packages, force-purged after the rootfs is assembled with
 #   dpkg --purge --force-depends --force-remove-essential --force-remove-protected
-# build/audit.sh fails the build if a purgable package (one outside the runtime
+# build/audit.ts fails the build if a purgable package (one outside the runtime
 # closure) is classified in none of keep-packages.txt / purge-packages.txt /
 # purge-packages-late.txt. To re-derive this list, empty it, build, and triage
-# what audit.sh reports -- the same loop as build/essential-packages.txt.
+# what audit.ts reports -- the same loop as build/essential-packages.txt.
 #
 # Packages are removed from the dependency-graph leaves first regardless of the
 # order here; a second pass (purge-packages-late.txt) holds back tools that the

@@ -29,7 +29,7 @@ RUN apt-get update \
       xz-utils \
       # to assemble the rootfs
       mmdebstrap \
-      # to read browser DT_NEEDED entries in build/audit.sh
+      # to read browser DT_NEEDED entries in build/audit.ts
       binutils \
  && curl --fail --location https://deb.nodesource.com/setup_24.x --output /tmp/nodesource_setup.sh \
  && bash /tmp/nodesource_setup.sh \
@@ -163,7 +163,7 @@ RUN --security=insecure \
       # the per-package rationale lives. The purge then runs in two passes: the
       # second holds back tools (debconf/perl-base/mawk, libpython3*) that the
       # first pass's postrm scripts still call.
-      --customize-hook='bash /tmp/vs-src/build/audit.sh "$1"' \
+      --customize-hook='node /tmp/vs-src/build/audit.ts "$1"' \
       --customize-hook="chroot \"\$1\" dpkg --purge --force-depends --force-remove-essential --force-remove-protected $PURGE" \
       --customize-hook="chroot \"\$1\" dpkg --purge --force-depends --force-remove-essential --force-remove-protected $PURGE_LATE" \
       trixie /rootfs

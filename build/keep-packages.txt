@@ -1,8 +1,8 @@
-# Packages kept in the image that build/audit.sh's runtime closure cannot reach.
-# audit.sh fails the build if a package outside the closure is listed in none of
+# Packages kept in the image that build/audit.ts's runtime closure cannot reach.
+# audit.ts fails the build if a package outside the closure is listed in none of
 # keep-packages.txt / purge-packages.txt / purge-packages-late.txt, so each one
 # here is an explicit "keep" decision. To re-derive, empty the purge files and
-# triage what audit.sh reports -- the same loop as build/essential-packages.txt.
+# triage what audit.ts reports -- the same loop as build/essential-packages.txt.
 #
 # The closure follows DT_NEEDED links, so it cannot see:
 #   data       packages with no .so, read via /usr/share/* through the
