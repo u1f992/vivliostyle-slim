@@ -102,10 +102,8 @@ jobs:
         run: |
           # .dockerignore is not overlaid: the CLI checkout ships its own.
           cp -a Dockerfile image-contract.sh vivliostyle-cli/
-          rm -rf vivliostyle-cli/slim
-          cp -a slim vivliostyle-cli/slim
           # Merge our build/ assets into the CLI's existing build/ (keeps fonts.conf).
-          cp -a build/*.ts build/essential-packages.txt vivliostyle-cli/build/
+          cp -a build/audit.sh build/*.ts build/*.txt vivliostyle-cli/build/
 
       - name: Log in to GHCR
         uses: docker/login-action@v4

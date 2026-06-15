@@ -35,6 +35,8 @@ RUN apt-get update \
       xz-utils \
       # to assemble the rootfs
       mmdebstrap \
+      # to read browser DT_NEEDED entries in build/audit.sh
+      binutils \
  && curl --fail --location https://deb.nodesource.com/setup_24.x --output /tmp/nodesource_setup.sh \
  && bash /tmp/nodesource_setup.sh \
  && apt-get install --yes --no-install-recommends \
@@ -104,6 +106,8 @@ COPY --from=dpkg-excludes /tmp/debian-13-slim.conf /tmp/debian-13-slim.conf
 # AppArmor profile (docker-default) also blocks mounting sysfs and devpts.
 RUN --security=insecure \
     ESSENTIAL="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' /tmp/vs-src/build/essential-packages.txt)" \
+ && PURGE="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' /tmp/vs-src/build/purge-packages.txt | tr '\n' ' ')" \
+ && PURGE_LATE="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' /tmp/vs-src/build/purge-packages-late.txt | tr '\n' ' ')" \
  && mmdebstrap \
       --format=dir \
       --variant=custom \
@@ -160,73 +164,14 @@ RUN --security=insecure \
       --customize-hook='copy-in /tmp/puppeteer /opt/' \
       --customize-hook="chown --recursive ${USER_UID}:${USER_GID} \"\$1/opt/puppeteer\"" \
       # ---- install-time-only package purge ---------------------------------
-      # Candidates come from slim/audit.sh (runtime-closure orphans). What's
-      # below is the hand-vetted subset. To re-derive: empty this --customize-hook,
-      # rebuild, then
-      #   IMAGE=vivliostyle/cli:10.5.0-slim-prepurge slim/audit.sh
-      #
-      # audit.sh flags these as orphan but we keep them (with what audit.sh
-      # missed in each case):
-      #   coreutils util-linux findutils diffutils grep sed libc-bin
-      #     Essentials. dpkg shells out to /usr/bin/diff for conffile management.
-      #   libgtk-3-{0t64,common} libgdk-pixbuf-{2.0-0,2.0-common}
-      #   libcairo-gobject2 libpangoft2-1.0-0 libpangocairo-1.0-0
-      #   libcolord2 libxcursor1 libxinerama1
-      #     chrome dlopens these at GUI init (theming, cursors, font shaping).
-      #   libepoxy0 libvulkan1 libwayland-{client0,cursor0,egl1}
-      #     chrome's GL / Vulkan / Wayland paths; still consulted with --disable-gpu.
-      #   dbus dbus-daemon dbus-bin dbus-{system,session,user}-bus-common
-      #     chrome attempts a dbus connect on startup; the libs need to resolve
-      #     even if the connect fails.
-      #   procps libproc2-0
-      #     chrome's sandbox + zygote walk /proc through ps.
-      #   mount libsmartcols1
-      #     util-linux transitive runtime deps.
-      #   libsystemd-shared
-      #     libsystemd0 dlopens /usr/lib/systemd/libsystemd-shared-<ver>.so.
-      #   libcloudproviders0
-      #     firefox dlopens this at startup; ldd cannot see the dep.
-      #
-      # Conversely, audit.sh keeps these, but they can actually be removed
-      #   mesa-libgallium libllvm19 libz3-4
-      #     system software-GL; Chrome uses its own bundled SwiftShader instead.
-      #   adwaita-icon-theme
-      #     GTK icon set; surfaces only in GTK dialogs.
-      #   python3* libpython3*
-      #     NodeSource's nodejs distribution pulls in python so
-      #     third-party libraries can use node-gyp, but it brings no
-      #     compiler; building native code at "npm install" needs extra
-      #     installs anyway, so there is no reason to keep python alone.
-      #     see https://github.com/nodejs/node-gyp/blob/v12.3.0/README.md?plain=1#L72
-      #
-      # Packages are removed from the dependency-graph leaves first,
-      # regardless of list order; but Debian lets Essential packages be used
-      # implicitly by maintainer scripts without declaring them as dependencies,
-      # so under this unusual forced purge a few removal scripts would lose
-      # tools they rely on, which are therefore purged in a second pass:
-      # - libpam-* postrm scripts call debconf's Perl frontend
-      # - python's prerm script calls mawk.
-      # - python3*'s postrm runs the Python interpreter (libpython3*).
-      # see https://salsa.debian.org/dbnpolicy/policy/-/blob/debian/4.7.4.1/policy/ch-binary.rst#L330-337
-      --customize-hook='chroot "$1" dpkg --purge --force-depends \
-        --force-remove-essential --force-remove-protected \
-        init-system-helpers \
-        mesa-libgallium libllvm19 libz3-4 \
-        adwaita-icon-theme \
-        python3 python3-minimal python3.13 python3.13-minimal \
-        gnupg gnupg-l10n gpg gpg-agent gpgsm gpgconf dirmngr pinentry-curses \
-        libnpth0t64 libassuan9 libksba8 \
-        xdg-utils wget gtk-update-icon-cache \
-        libfontenc1 xfonts-utils xfonts-encodings \
-        dconf-service dconf-gsettings-backend libdconf1 \
-        libsensors5 libsensors-config libapparmor1 \
-        libpam-systemd libpam-modules libpam-modules-bin libpam-runtime libpam0g \
-        passwd adduser login.defs liblastlog2-2 \
-        systemd systemd-sysv sysvinit-utils' \
-      --customize-hook='chroot "$1" dpkg --purge --force-depends \
-        --force-remove-essential --force-remove-protected \
-        debconf perl-base mawk \
-        libpython3-stdlib libpython3.13-stdlib libpython3.13-minimal' \
+      # The audit hook fails the build unless every purgable package is
+      # classified in build/{keep,purge,purge-packages-late}-packages.txt, where
+      # the per-package rationale lives. The purge then runs in two passes: the
+      # second holds back tools (debconf/perl-base/mawk, libpython3*) that the
+      # first pass's postrm scripts still call.
+      --customize-hook='bash /tmp/vs-src/build/audit.sh "$1"' \
+      --customize-hook="chroot \"\$1\" dpkg --purge --force-depends --force-remove-essential --force-remove-protected $PURGE" \
+      --customize-hook="chroot \"\$1\" dpkg --purge --force-depends --force-remove-essential --force-remove-protected $PURGE_LATE" \
       trixie /rootfs
 
 FROM scratch
