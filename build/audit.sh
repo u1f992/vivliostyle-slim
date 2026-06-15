@@ -117,7 +117,7 @@ while IFS= read -r line; do
     [ -n "$prov" ] || continue
     while IFS= read -r v; do
         [ -n "$v" ] && [ -z "${REAL[$v]:-}" ] && REAL[$v]=$pkg
-    done < <(printf '%s' "$prov" | sed 's/([^)]*)//g' | tr ',' '\n' | sed 's/[[:space:]]//g;/^$/d')
+    done < <(printf '%s\n' "$prov" | sed 's/([^)]*)//g' | tr ',' '\n' | sed 's/[[:space:]]//g;/^$/d')
 done < <(dq -W --showformat='${Package}\t${Provides}\n' 2>/dev/null)
 
 declare -A VISITED
