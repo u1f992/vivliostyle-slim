@@ -236,25 +236,10 @@ check_puppeteer_cache_dir_owned_by_user() {
 # root-owned socket the server drops in a sticky dir -- with an OTHERWISE
 # UNTOUCHED slim container. No host display is needed (the sidecar is the
 # display), so this stays CI-portable.
-GUI_SIDECAR_IMG=vivcli-xvfb-sidecar:img
-
-# Throwaway X server image: Xvfb plus the xdpyinfo/xlsclients/xwininfo probes.
-# Built from the same debian base the slim build already pulled; none of it
-# lands in $IMAGE. Idempotent -- CACHED on repeat.
-gui_build_sidecar_image() {
-    docker build --tag "$GUI_SIDECAR_IMG" - >/tmp/image-contract.gui.build 2>&1 <<'DOCKERFILE'
-FROM debian:13-slim
-RUN apt-get update --quiet=2 \
- && apt-get install --yes --no-install-recommends xvfb x11-utils \
- && rm --recursive --force /var/lib/apt/lists/*
-DOCKERFILE
-}
-
 # gui_teardown <sidecar-container> <probe-container> <socket-volume>
 gui_teardown() {
     docker rm --force "$2" "$1" >/dev/null 2>&1 || true
     docker volume rm --force "$3" >/dev/null 2>&1 || true
-    docker rmi "$GUI_SIDECAR_IMG" >/dev/null 2>&1 || true
 }
 
 # check_preview_gui <browser-arg>
@@ -262,7 +247,7 @@ gui_teardown() {
 # slim image against a sidecar X server, must open a browser window on it.
 check_preview_gui() {
     local browser_arg="$1"
-    local suffix sidecar probe vol rc=1 i ready=0
+    local suffix sidecar probe vol rc=1 ready=0 deadline
     suffix=$(printf '%s' "$browser_arg" | tr --complement 'a-z0-9' '-')
     sidecar="vivcli-xvfb-${suffix}"
     probe="vivcli-preview-${suffix}"
@@ -271,27 +256,34 @@ check_preview_gui() {
     # Clear debris a crashed earlier run may have left under these fixed names.
     gui_teardown "$sidecar" "$probe" "$vol"
 
-    if ! gui_build_sidecar_image; then
-        cat /tmp/image-contract.gui.build >&2
-        return 1
-    fi
-
-    # Start the X server; expose only its socket dir. -ac drops access control
-    # so the slim image's vivliostyle user connects with no Xauthority cookie
-    # (representative of the README's `xhost +SI:localuser:...`).
+    # Start the X server in a throwaway debian container: xvfb and the
+    # xdpyinfo/xlsclients/xwininfo probes are apt-installed at run time, so
+    # nothing is built and no image is left in the local store. -ac drops X
+    # access control so the slim image's vivliostyle user connects with no
+    # Xauthority cookie (representative of the README's `xhost +SI:localuser`).
+    # Only the socket directory is shared with the slim container.
     docker volume create "$vol" >/dev/null \
         || { gui_teardown "$sidecar" "$probe" "$vol"; return 1; }
     docker run --detach --name "$sidecar" --volume "$vol":/tmp/.X11-unix \
-        "$GUI_SIDECAR_IMG" \
-        sh -c 'mkdir --parents /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix \
+        debian:13-slim \
+        sh -c 'apt-get update --quiet=2 \
+            && apt-get install --yes --no-install-recommends xvfb x11-utils \
+            && mkdir --parents /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix \
             && exec Xvfb :99 -screen 0 1024x768x24 -ac -nolisten tcp' \
         >/dev/null 2>&1
-    for i in $(seq 1 50); do
+    # Wait through the apt-install + server start, or bail out early if the
+    # sidecar exits (e.g. the install failed).
+    deadline=$((SECONDS + 120))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        if ! docker inspect --format '{{.State.Running}}' "$sidecar" 2>/dev/null \
+               | grep --quiet true; then
+            break
+        fi
         if docker exec "$sidecar" xdpyinfo -display :99 >/dev/null 2>&1; then
             ready=1
             break
         fi
-        sleep 0.3
+        sleep 1
     done
     if [ "$ready" -ne 1 ]; then
         echo "Xvfb sidecar did not become ready" >&2
@@ -309,7 +301,7 @@ check_preview_gui() {
         --env DISPLAY=:99 \
         "$IMAGE" preview --browser "$browser_arg" >/dev/null 2>&1
 
-    local deadline=$((SECONDS + 300))
+    deadline=$((SECONDS + 300))
     while [ "$SECONDS" -lt "$deadline" ]; do
         if ! docker inspect --format '{{.State.Running}}' "$probe" 2>/dev/null \
                | grep --quiet true; then
@@ -435,29 +427,20 @@ EOF
 # package and its pulled-back dependency actually run, and that dpkg ended in a
 # clean (install ok installed) state rather than a forced/half-configured one.
 check_apt_repair_install() {
-    local tmpdir rc=0
-    tmpdir=$(mktemp --directory) || return 1
-    cat > "$tmpdir/Dockerfile" <<DOCKERFILE
-FROM ${IMAGE}
-USER root
-RUN apt-get update \
- && apt-get download perl-base \
- && dpkg --install --force-depends perl-base_*.deb \
- && rm --force perl-base_*.deb \
- && apt-get install --fix-broken --yes --no-install-recommends \
- && apt-get install --yes --no-install-recommends git \
- && rm --recursive --force /var/lib/apt/lists/*
-USER vivliostyle
-DOCKERFILE
-    if ! docker build --tag vivcli-apt-repair "$tmpdir" >/tmp/image-contract.apt.build 2>&1; then
-        cat /tmp/image-contract.apt.build >&2
-        rm --recursive --force "$tmpdir"
-        return 1
-    fi
-    rm --recursive --force "$tmpdir"
-
-    docker run --rm --entrypoint sh vivcli-apt-repair -c '
+    # The whole recipe -- repair then install -- runs in one container as root
+    # (apt/dpkg need it), so nothing is built and no image is left behind. git
+    # and perl (the purged dependency the install pulls back) must then run,
+    # dpkg must report a clean install, and a real commit must go through. The
+    # exit status of this single `docker run` is the test result.
+    docker run --rm --user root --entrypoint sh "$IMAGE" -c '
         set -e
+        apt-get update
+        apt-get download perl-base
+        dpkg --install --force-depends perl-base_*.deb
+        rm --force perl-base_*.deb
+        apt-get install --fix-broken --yes --no-install-recommends
+        apt-get install --yes --no-install-recommends git
+        rm --recursive --force /var/lib/apt/lists/*
         # git and perl -- the purged dependency the install pulled back -- must
         # both run, and dpkg must report a clean install for the package, its
         # restored dependency, and the hand-bootstrapped Essential perl-base.
@@ -475,9 +458,6 @@ DOCKERFILE
             commit --allow-empty --quiet --message probe
         git log --oneline >/dev/null
     '
-    rc=$?
-    docker rmi vivcli-apt-repair >/dev/null 2>&1
-    return $rc
 }
 
 # --- run ----------------------------------------------------------------
