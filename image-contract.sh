@@ -121,16 +121,51 @@ check_pnpm() {
     in_image 'pnpm --version'
 }
 
-check_press_ready() {
-    in_image 'command -v press-ready'
-}
+# --- press-ready (PDF/X-1a preflight) ------------------------------------
+# The contract is not "gs/poppler binaries exist on PATH" but "press-ready runs
+# end to end through vivliostyle". In a container the CLI runs the local
+# press-ready (src/output/pdf-postprocess.ts), which shells out to ghostscript
+# and to poppler's pdffonts/pdfinfo -- so one successful run exercises that whole
+# chain, and only a functional run like this catches breakage that leaves the
+# binaries on PATH but unloadable (e.g. a purged libassuan.so.9). A minimal book
+# built with pdfPostprocess.preflight=press-ready must come out rewritten by
+# Ghostscript: its Producer is "GPL Ghostscript ...", where a plain build leaves
+# "Skia/PDF". Reading that back with the image's own pdfinfo also confirms poppler.
+check_press_ready_pdf() {
+    local tmpdir rc=0
+    tmpdir=$(mktemp --directory)
+    chmod 777 "$tmpdir"
+    cat >"$tmpdir/manuscript.md" <<'EOF'
+# Hello
 
-check_gs() {
-    in_image 'gs --version'
-}
-
-check_poppler_pdftops() {
-    in_image 'command -v pdftops'
+press-ready contract test.
+EOF
+    cat >"$tmpdir/vivliostyle.config.js" <<'EOF'
+export default {
+  title: 'press-ready',
+  entry: ['manuscript.md'],
+  output: 'out.pdf',
+  pdfPostprocess: { preflight: 'press-ready' },
+};
+EOF
+    docker run --rm --volume "$tmpdir":/data "$IMAGE" build || rc=$?
+    if [ $rc -ne 0 ] || [ ! -f "$tmpdir/out.pdf" ] \
+       || ! head --bytes=4 "$tmpdir/out.pdf" | grep --quiet '^%PDF'; then
+        echo "press-ready build rc=$rc"
+        ls --format=long --all "$tmpdir" >&2 || true
+        rm --recursive --force "$tmpdir"
+        return 1
+    fi
+    # Ghostscript is what press-ready uses to rewrite the PDF, so a Ghostscript
+    # producer proves press-ready actually ran (not silently skipped).
+    local producer
+    producer=$(docker run --rm --volume "$tmpdir":/data --entrypoint pdfinfo "$IMAGE" /data/out.pdf 2>/dev/null \
+               | sed --quiet 's/^Producer:[[:space:]]*//p')
+    rm --recursive --force "$tmpdir"
+    case "$producer" in
+        *Ghostscript*) return 0 ;;
+        *) echo "press-ready did not run: producer='${producer}' (expected Ghostscript)" >&2; return 1 ;;
+    esac
 }
 
 check_fonts_conf_noto_aliases() {
@@ -472,9 +507,6 @@ echo "[runtime dependencies]"
 run_test "node available"                                  check_node
 run_test "npm available (extension contract)"              check_npm
 run_test "pnpm available (extension contract)"             check_pnpm
-run_test "press-ready resolvable via PATH"                 check_press_ready
-run_test "gs (ghostscript) available"                      check_gs
-run_test "pdftops (poppler-utils) available"               check_poppler_pdftops
 run_test "/etc/fonts/local.conf has Noto CJK aliases"      check_fonts_conf_noto_aliases
 run_test "Noto CJK JP font is installed"                   check_noto_cjk_font_installed
 
@@ -504,6 +536,9 @@ run_test "vivliostyle build --browser firefox"                    check_cli_inst
 
 echo "[derived image extension]"
 run_test "derived image repair + 'apt-get install git' (git & perl run)"   check_apt_repair_install
+
+echo "[press-ready]"
+run_test "press-ready preflight runs end-to-end (gs + poppler)"   check_press_ready_pdf
 
 echo "[end-to-end]"
 run_test "vivliostyle build produces a valid PDF"          check_end_to_end_pdf_build
