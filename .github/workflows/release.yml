@@ -149,8 +149,46 @@ jobs:
           path: digests/${{ matrix.arch }}
           if-no-files-found: error
 
-  manifest:
+  verify:
     needs: [prepare, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout image-contract.sh
+        uses: actions/checkout@v6
+
+      - name: Download this architecture's digest
+        uses: actions/download-artifact@v8
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digests
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Verify the image contract
+        run: |
+          # Each architecture runs on its native runner, so the contract tests
+          # the real pushed bits without emulation. The manifest job needs this
+          # one and both matrix legs must pass, so a contract failure on either
+          # architecture blocks the multi-arch tag.
+          DIGEST="$(cat "digests/${{ matrix.arch }}")"
+          docker pull "${IMAGE_NAME}@${DIGEST}"
+          IMAGE="${IMAGE_NAME}@${DIGEST}" ./image-contract.sh
+
+  manifest:
+    needs: [prepare, verify]
     runs-on: ubuntu-latest
     steps:
       - name: Download digests
