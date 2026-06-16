@@ -133,16 +133,6 @@ check_poppler_pdftops() {
     in_image 'command -v pdftops'
 }
 
-check_xz() {
-    # required by @puppeteer/browsers to extract Firefox .tar.xz at runtime
-    in_image 'command -v xz'
-}
-
-check_unzip() {
-    # required by @puppeteer/browsers to extract Chrome .zip at runtime
-    in_image 'command -v unzip'
-}
-
 check_fonts_conf_noto_aliases() {
     in_image '
         test -f /etc/fonts/local.conf \
@@ -485,8 +475,6 @@ run_test "pnpm available (extension contract)"             check_pnpm
 run_test "press-ready resolvable via PATH"                 check_press_ready
 run_test "gs (ghostscript) available"                      check_gs
 run_test "pdftops (poppler-utils) available"               check_poppler_pdftops
-run_test "xz available (Firefox/.tar.xz extraction)"       check_xz
-run_test "unzip available (Chrome/.zip extraction)"        check_unzip
 run_test "/etc/fonts/local.conf has Noto CJK aliases"      check_fonts_conf_noto_aliases
 run_test "Noto CJK JP font is installed"                   check_noto_cjk_font_installed
 
