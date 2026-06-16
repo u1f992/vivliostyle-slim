@@ -212,55 +212,22 @@ check_puppeteer_cache_dir_owned_by_user() {
 }
 
 # --- GUI / X11 reachability ----------------------------------------------
-# Headless PDF generation (the end-to-end test below) exercises only a subset
-# of a browser's startup path. The slim image is also expected to render a real
-# GUI behind X11/Wayland forwarding for `vivliostyle preview` and similar
-# workflows -- representatively, by drawing to an X server the host provides
-# (README: `--volume /tmp/.X11-unix:/tmp/.X11-unix`).
-#
-# These tests drive that real workflow rather than launching a browser by hand:
-# `vivliostyle preview` with no entry opens the viewer's start page in a
-# non-headless browser window (src/core/preview.ts -> vsBrowserPlugin ->
-# launchPreview, which does page.goto(start-page) with headless=false). The
-# bundled browser is build-time configurable (the BROWSER arg), so nothing here
-# assumes a particular one is present; instead each test names a browser via
-# --browser, and when the image does not already bundle it the CLI downloads it
-# first (src/browser.ts downloadBrowser). We then assert a client window reaches
-# the X server. Rendering correctness is out of scope -- we only confirm the
-# browser draws a GUI to the shared socket.
-#
-# Crucially the image must do all this AS SHIPPED: no apt install, no dpkg
-# repair of the deliberately-broken slim state. So the X server comes from a
-# throwaway sidecar container (debian:13-slim, with xvfb apt-installed at run
-# time -- nothing is built and no image is left behind), which the OTHERWISE
-# UNTOUCHED slim container reaches over the abstract X socket of a shared
-# network namespace, so there is no socket volume to clean up either. No host
-# display is needed (the sidecar is the display), so this stays CI-portable.
-#
-# There is deliberately NO explicit teardown: every container is `docker run
-# --rm`, the sidecar watches for the window itself and exits when it appears (so
-# --rm drops it), and the probe shares the sidecar's PID namespace, so it is
-# killed and --rm'd the instant the sidecar goes. An interrupted run leaves
-# nothing to remove by hand -- the containers clean themselves up.
+# The slim image must open a real, non-headless GUI window via `vivliostyle
+# preview`, not just render headless PDFs. It ships no X server and must stay as
+# shipped (no install/repair), so a throwaway sidecar provides one and the
+# unmodified slim container draws to it.
 
 # check_preview_gui <browser-arg>
-# `vivliostyle preview --browser <arg>` with no entry, run in the UNMODIFIED
-# slim image against a sidecar X server, must open a browser window on it.
 check_preview_gui() {
     local browser_arg="$1"
     local suffix sc pr code ready=0 deadline
     suffix=$(printf '%s' "$browser_arg" | tr --complement 'a-z0-9' '-')
-    # $$-keyed names are unique per contract run, so a container still cleaning
-    # itself up from an interrupted earlier run can never collide.
-    sc="vivcli-xvfb-$$-${suffix}"
+    sc="vivcli-xvfb-$$-${suffix}"   # $$: unique per run -> no clash with an interrupt's leftovers
     pr="vivcli-preview-$$-${suffix}"
 
-    # The sidecar installs xvfb + the x11 probes at run time, starts Xvfb, then
-    # watches for a client window itself: exit 0 the moment one maps, exit 1 if
-    # none does within the timeout (which must cover a from-scratch browser
-    # download). --rm removes it on exit -- there is nothing to tear down.
-    # chromium maps helper windows before xlsclients lists it, so a listed client
-    # OR any child of the root window counts.
+    # The sidecar is also the judge: it exits 0 once a client window maps, 1 on
+    # timeout. (chromium maps helper windows before xlsclients lists them, hence
+    # the xwininfo fallback.)
     docker run --rm --detach --name "$sc" debian:13-slim sh -c '
         apt-get update --quiet=2 >/dev/null 2>&1 || exit 1
         apt-get install --yes --no-install-recommends xvfb x11-utils >/dev/null 2>&1 || exit 1
@@ -275,8 +242,6 @@ check_preview_gui() {
         exit 1
     ' >/dev/null 2>&1
 
-    # Let Xvfb come up (the apt install runs each time) before the browser tries
-    # to connect; bail if the sidecar dies first.
     deadline=$((SECONDS + 120))
     while [ "$SECONDS" -lt "$deadline" ]; do
         docker inspect --format '{{.State.Running}}' "$sc" 2>/dev/null \
@@ -293,18 +258,14 @@ check_preview_gui() {
         return 1
     fi
 
-    # Drive the real GUI workflow in the unmodified slim image. The probe reaches
-    # the X server through the sidecar's network namespace (abstract socket) and
-    # shares its PID namespace, so when the sidecar exits the probe is killed and
-    # --rm'd with it. -ac means no Xauthority cookie is needed (the README's
-    # `xhost +SI:localuser`); chrome runs --no-sandbox, so sharing the PID
-    # namespace is safe.
+    # --network: reach Xvfb over the shared netns's abstract socket (no volume).
+    # --pid: the probe dies and --rm's with the sidecar, so there is no teardown
+    # (safe only because the CLI launches chrome with --no-sandbox).
     docker run --rm --detach --name "$pr" \
         --network "container:$sc" --pid "container:$sc" \
         --env DISPLAY=:99 \
         "$IMAGE" preview --browser "$browser_arg" >/dev/null 2>&1
 
-    # The sidecar's exit code IS the result: 0 = a window appeared, 1 = timeout.
     code=$(docker wait "$sc" 2>/dev/null)
     if [ "$code" != 0 ]; then
         echo "no GUI window appeared for 'vivliostyle preview --browser ${browser_arg}'" >&2
