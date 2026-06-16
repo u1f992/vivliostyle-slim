@@ -68,12 +68,9 @@ check_path_includes_node_modules_bin() {
 
 # --- runtime identity ---------------------------------------------------
 
-check_runtime_uid_gid() {
-    local out
-    out=$(in_image 'id --user; id --group; id --user --name')
-    printf '%s\n' "$out" | sed --quiet '1p' | grep --quiet --line-regexp 1000 || return 1
-    printf '%s\n' "$out" | sed --quiet '2p' | grep --quiet --line-regexp 1000 || return 1
-    printf '%s\n' "$out" | sed --quiet '3p' | grep --quiet --line-regexp vivliostyle
+check_runs_as_nonroot() {
+    # The specific uid is a build arg (USER_UID); the contract is only non-root.
+    [ "$(in_image 'id --user')" != 0 ]
 }
 
 check_vs_cli_version_marker() {
@@ -395,7 +392,7 @@ run_test "LANG=C.UTF-8"                                    check_lang
 run_test "PATH includes node_modules/.bin"                 check_path_includes_node_modules_bin
 
 echo "[runtime identity]"
-run_test "Runtime UID/GID/name = 1000/1000/vivliostyle"    check_runtime_uid_gid
+run_test "container runs as a non-root user"               check_runs_as_nonroot
 run_test ".vs-cli-version marker exists (isInContainer)"   check_vs_cli_version_marker
 run_test "/data is writable by the runtime user"           check_data_dir_writable_by_user
 
