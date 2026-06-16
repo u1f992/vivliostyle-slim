@@ -169,10 +169,6 @@ check_fonts_conf_noto_aliases() {
         fc-match "MS Gothic" | grep --quiet "Noto Sans CJK JP"'
 }
 
-check_noto_cjk_font_installed() {
-    in_image 'fc-list | grep --quiet --ignore-case "Noto Serif CJK JP"'
-}
-
 check_font_file_loadable() {
     in_image "fc-list | grep --quiet --fixed-strings '$1'"
 }
@@ -377,7 +373,6 @@ run_test "node executes JS (--eval)"                       check_node
 run_test "npm installs @vivliostyle/cli and it runs"       check_npm
 run_test "pnpm installs @vivliostyle/cli and it runs"      check_pnpm
 run_test "CJK font aliases resolve to Noto (fc-match)"     check_fonts_conf_noto_aliases
-run_test "Noto CJK JP font is installed"                   check_noto_cjk_font_installed
 
 echo "[fonts: full Noto set]"
 run_test "fonts-noto-core loadable (NotoSans-Regular.ttf)"            check_font_file_loadable NotoSans-Regular.ttf
