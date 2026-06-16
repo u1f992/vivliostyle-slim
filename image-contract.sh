@@ -176,34 +176,6 @@ check_font_file_loadable() {
     in_image "fc-list | grep --quiet --fixed-strings '$1'"
 }
 
-# --- browser ------------------------------------------------------------
-
-check_browser_present() {
-    # @puppeteer/browsers lays binaries at /opt/puppeteer/<browser>/<version>/<dir>/<binary>
-    # (e.g. chrome/<v>/chrome-linux64/chrome, firefox/<v>/firefox/firefox,
-    # chrome-headless-shell/<v>/chrome-headless-shell-linux64/chrome-headless-shell).
-    # the Dockerfile accepts an arbitrary BROWSER value, so probe for any of
-    # the binaries @puppeteer/browsers can drop here rather than hard-coding chrome.
-    in_image '
-        if [ "$(dpkg --print-architecture)" = "amd64" ]; then
-            ls /opt/puppeteer/chrome/*/*/chrome \
-               /opt/puppeteer/firefox/*/*/firefox \
-               /opt/puppeteer/chrome-headless-shell/*/*/chrome-headless-shell \
-               2>/dev/null | grep --quiet .
-        else
-            command -v chromium >/dev/null
-        fi'
-}
-
-check_puppeteer_cache_dir_owned_by_user() {
-    in_image '
-        if [ "$(dpkg --print-architecture)" = "amd64" ]; then
-            test -d /opt/puppeteer && [ "$(stat --format=%U /opt/puppeteer)" = "vivliostyle" ]
-        else
-            true
-        fi'
-}
-
 # --- GUI / X11 reachability ----------------------------------------------
 # The slim image must open a real, non-headless GUI window via `vivliostyle
 # preview`, not just render headless PDFs. It ships no X server and must stay as
@@ -268,10 +240,10 @@ check_preview_gui() {
     return 0
 }
 
-# --- browser install ----------------------------------------------------
-# The CLI installs a browser when --browser requests one not already in
-# the image. The image must support this for each of the three browsers
-# the CLI advertises.
+# --- browser build (headless PDF) ---------------------------------------
+# `vivliostyle build` must render a PDF with each browser the CLI advertises,
+# downloading any not bundled. (chrome is pinned below the bundled version to
+# exercise its download path here too.)
 
 cli_install_probe() {
     local browser_arg="$1"
@@ -416,22 +388,18 @@ run_test "fonts-noto-mono loadable (NotoMono-Regular.ttf)"            check_font
 run_test "fonts-noto-ui-core loadable (NotoLoopedLaoUI-Bold.ttf)"     check_font_file_loadable NotoLoopedLaoUI-Bold.ttf
 run_test "fonts-noto-ui-extra loadable (NotoLoopedLaoUI-Black.ttf)"   check_font_file_loadable NotoLoopedLaoUI-Black.ttf
 
-echo "[browser]"
-run_test "Bundled browser binary is present"               check_browser_present
-run_test "Puppeteer cache dir is owned by vivliostyle"     check_puppeteer_cache_dir_owned_by_user
-
 echo "[browser GUI: preview opens a window on an external X server]"
 run_test "preview --browser chrome opens a GUI window"     check_preview_gui chrome
 run_test "preview --browser chromium opens a GUI window"   check_preview_gui chromium
 run_test "preview --browser firefox opens a GUI window"    check_preview_gui firefox
 
-echo "[browser install]"
+echo "[browser build: each browser renders a headless PDF]"
 run_test "vivliostyle build --browser chrome@130 (linux/amd64)"   check_cli_install_chrome
 run_test "vivliostyle build --browser chromium (linux/amd64)"     check_cli_install_chromium
 run_test "vivliostyle build --browser firefox"                    check_cli_install_firefox
 
 echo "[derived image extension]"
-run_test "derived image repair + 'apt-get install git' (git & perl run)"   check_apt_repair_install
+run_test "derived image repair + 'apt-get install git' (git runs)"   check_apt_repair_install
 
 echo "[press-ready]"
 run_test "press-ready preflight runs end-to-end (gs + poppler)"   check_press_ready_pdf
