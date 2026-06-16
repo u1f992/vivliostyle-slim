@@ -61,11 +61,6 @@ check_lang() {
         | grep --quiet '^LANG=C.UTF-8$'
 }
 
-check_path_includes_node_modules_bin() {
-    docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGE" \
-        | grep --quiet '/opt/vivliostyle-cli/node_modules/.bin'
-}
-
 # --- runtime identity ---------------------------------------------------
 
 check_runs_as_nonroot() {
@@ -118,6 +113,15 @@ check_pnpm() {
         pnpm init >/dev/null 2>&1 &&
         pnpm add @vivliostyle/cli >/dev/null 2>&1 &&
         ./node_modules/.bin/vivliostyle --version >/dev/null'
+}
+
+# The original image has /opt/vivliostyle-cli/node_modules/.bin on PATH. That
+# directory holds the bins of Vivliostyle CLI dependencies such as press-ready.
+check_press_ready() {
+    in_image '
+        d=$(mktemp -d) && cd "$d" &&
+        gs -q -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -sOutputFile=in.pdf -c showpage &&
+        press-ready build -i in.pdf -o out.pdf'
 }
 
 # --- press-ready (PDF/X-1a preflight) ------------------------------------
@@ -305,7 +309,6 @@ run_test "Entrypoint is [\"vivliostyle\"]"                 check_entrypoint
 run_test "WORKDIR is /data"                                check_workdir
 run_test "Config.User is vivliostyle"                      check_user_metadata
 run_test "LANG=C.UTF-8"                                    check_lang
-run_test "PATH includes node_modules/.bin"                 check_path_includes_node_modules_bin
 
 echo "[runtime identity]"
 run_test "container runs as a non-root user"               check_runs_as_nonroot
@@ -319,6 +322,7 @@ echo "[other tools]"
 run_test "node executes JS (--eval)"                       check_node
 run_test "npm installs @vivliostyle/cli and it runs"       check_npm
 run_test "pnpm installs @vivliostyle/cli and it runs"      check_pnpm
+run_test "press-ready is on PATH and runs"                 check_press_ready
 
 echo "[fonts]"
 run_test "CJK font aliases resolve to Noto (fc-match)"                check_fonts_conf_noto_aliases
