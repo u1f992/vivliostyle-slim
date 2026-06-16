@@ -37,6 +37,27 @@ RUN apt-get update \
       nodejs \
  && npm install --global pnpm
 
+COPY <<'EOF' /tmp/scripts/package.json
+{ "type": "module", "dependencies": { "npm-install-checks": "9.0.0" } }
+EOF
+COPY <<'EOF' /tmp/scripts/prune-foreign.js
+import { readFileSync } from 'node:fs';
+import { checkPlatform } from 'npm-install-checks';
+
+try {
+  const manifest = JSON.parse(readFileSync(process.argv[3], 'utf8'));
+  checkPlatform(manifest, false, {
+    os: 'linux',
+    cpu: process.argv[2] === 'arm64' ? 'arm64' : 'x64',
+    libc: 'glibc',
+  });
+  process.exit(1);
+} catch (e) {
+  process.exit(e?.code === 'EBADPLATFORM' ? 0 : 1);
+}
+EOF
+RUN npm install --prefix /tmp/scripts
+
 COPY . /tmp/vs-src
 
 # Install Vivliostyle CLI
@@ -55,7 +76,7 @@ RUN cp --archive /tmp/vs-src /tmp/vs-build \
 RUN cp --archive /tmp/vs-src /tmp/vs-deps \
  && cd /tmp/vs-deps \
  && pnpm install --prod --ignore-scripts \
- && find node_modules/.pnpm -name package.json -type f -exec node /tmp/vs-src/build/prune-foreign.ts "${TARGETARCH}" {} \; -printf '%h\n' > /tmp/prune-foreign.txt \
+ && find node_modules/.pnpm -name package.json -type f -exec node /tmp/scripts/prune-foreign.js "${TARGETARCH}" {} \; -printf '%h\n' > /tmp/prune-foreign.txt \
  && while IFS= read -r dir; do \
       if [ -d "${dir}" ]; then rm --recursive --force "${dir}" && echo "prune-foreign: removed ${dir}"; fi; \
     done < /tmp/prune-foreign.txt \
@@ -64,11 +85,9 @@ RUN cp --archive /tmp/vs-src /tmp/vs-deps \
 # Download the browser and resolve its dependency-package list
 RUN mkdir /tmp/puppeteer \
  && if [ "${TARGETARCH}" = "amd64" ]; then \
-      /tmp/vivliostyle-cli/node_modules/.bin/browsers install "${BROWSER}" --path /tmp/puppeteer \
-   && distro=debian13-x64 browser=; \
+      /tmp/vivliostyle-cli/node_modules/.bin/browsers install "${BROWSER}" --path /tmp/puppeteer; \
     else \
-      # Chrome for Testing has no linux-arm64 build, so fall back to chromium package
-      distro=debian13-arm64 browser=chromium; \
+      echo "Skipping Puppeteer browser installation on arm64 architecture"; \
     fi \
  && if [ "${BROWSER%%@*}" = chrome ]; then \
       # These components ship only with branded Chrome and are unneeded at least for Vivliostyle
@@ -85,12 +104,7 @@ RUN mkdir /tmp/puppeteer \
       # UI translation files are separable, as Alpine's packaging shows.
       # see https://gitlab.alpinelinux.org/alpine/aports/-/blob/v3.23.4/community/chromium/APKBUILD#L983-984
      && { find /tmp/puppeteer/chrome/linux-*/chrome-*/locales -name '*.pak' ! -name 'en-US*.pak' -delete || true; }; \
-    fi \
- # @puppeteer/browsers' install-deps is unusable here: it reads a deb.deps file that
- # ships only with Chrome for Testing, so use Playwright's nativeDeps table instead.
- # see https://github.com/puppeteer/puppeteer/blob/browsers-v3.0.4/packages/browsers/src/install.ts#L306-L345
- && curl --fail --location https://raw.githubusercontent.com/microsoft/playwright/v1.60.0/packages/playwright-core/src/server/registry/nativeDeps.ts --output /tmp/nativeDeps.ts \
- && printf '%s' "$(node --input-type=module --eval "const { deps } = await import('/tmp/nativeDeps.ts'); const e = deps['${distro}']; process.stdout.write([...new Set([...e.chromium, ...e.firefox])].join(' '))")${browser:+ ${browser}}" > /tmp/browser-dependencies.txt
+    fi
 
 COPY --from=dpkg-excludes /tmp/debian-13-slim.conf /tmp/debian-13-slim.conf
 
@@ -127,7 +141,20 @@ RUN --security=insecure \
         apt \
         # ---
         nodejs \
-        $(cat /tmp/browser-dependencies.txt) \
+        # The dist_package_versions.json that Puppeteer references for the system
+        # packages Chrome depends on was last updated on 2024-07-08
+        # (b0ddd10a3084cbcae30f677e029f4ebeef5db702) and only lists up to Debian 12,
+        # so it does not look well maintained. For Firefox it points at a Mozilla
+        # page, but that does not pin down the concrete Debian package names.
+        # see https://github.com/puppeteer/puppeteer/blob/puppeteer-v25.1.0/docs/guides/system-requirements.md
+        # Puppeteer's `--install-deps` is a feature specific to the `deb.deps` file
+        # bundled with Chrome for Testing; Puppeteer does not manage the dependency
+        # packages itself.
+        # see https://github.com/puppeteer/puppeteer/blob/browsers-v3.0.4/packages/browsers/src/install.ts#L306-L345
+        $(curl --fail --location https://raw.githubusercontent.com/microsoft/playwright/v1.60.0/packages/playwright-core/src/server/registry/nativeDeps.ts --output /tmp/nativeDeps.ts \
+          && node --input-type=module --eval 'const{deps}=await import("/tmp/nativeDeps.ts");const e=deps["debian13-x64"];console.log([...new Set([...e.chromium, ...e.firefox])].join(" "))') \
+        # Chrome for Testing has no linux-arm64 build, so arm64 also needs the chromium package
+        $([ "${TARGETARCH}" = arm64 ] && echo chromium) \
         # press-ready requirements
         ghostscript \
         poppler-utils \
