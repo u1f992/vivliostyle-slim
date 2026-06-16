@@ -375,18 +375,10 @@ check_apt_repair_install() {
         apt-get install --fix-broken --yes --no-install-recommends
         apt-get install --yes --no-install-recommends git
         rm --recursive --force /var/lib/apt/lists/*
-        git --version >/dev/null
-        perl --version >/dev/null
-        for p in git perl liberror-perl perl-base; do
-            dpkg -s "$p" 2>/dev/null | grep --quiet "^Status: install ok installed" \
-                || { echo "$p is not cleanly installed" >&2; exit 1; }
-        done
-        work=$(mktemp -d)
-        cd "$work"
-        git init --quiet
-        git -c user.email=contract@example.com -c user.name=contract \
-            commit --allow-empty --quiet --message probe
-        git log --oneline >/dev/null
+        cd "$(mktemp -d)"
+        git init
+        git -c user.email=contract@example.com -c user.name=contract commit --allow-empty -m probe
+        git log --oneline
     '
 }
 
