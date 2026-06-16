@@ -89,8 +89,13 @@ check_data_dir_writable_by_user() {
 
 # --- CLI entry points ---------------------------------------------------
 
-check_vs_alias_runs() {
-    docker run --rm --entrypoint vs "$IMAGE" --version >/dev/null
+check_vs_aliases_vivliostyle() {
+    # `vs` must be vivliostyle under another name, not just some command that
+    # answers --version -- so require byte-identical --version output from both.
+    local vs viv
+    vs=$(docker run --rm --entrypoint vs "$IMAGE" --version 2>/dev/null)
+    viv=$(docker run --rm --entrypoint vivliostyle "$IMAGE" --version 2>/dev/null)
+    [ -n "$vs" ] && [ "$vs" = "$viv" ]
 }
 
 # --- runtime dependencies (Dockerfile-installed) ------------------------
@@ -394,7 +399,7 @@ run_test ".vs-cli-version marker exists (isInContainer)"   check_vs_cli_version_
 run_test "/data is writable by the runtime user"           check_data_dir_writable_by_user
 
 echo "[CLI entry points]"
-run_test "'vs --version' executes"                         check_vs_alias_runs
+run_test "vs is the same CLI as vivliostyle"               check_vs_aliases_vivliostyle
 
 echo "[runtime dependencies]"
 run_test "node available"                                  check_node
