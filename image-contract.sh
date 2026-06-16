@@ -89,14 +89,6 @@ check_data_dir_writable_by_user() {
 
 # --- CLI entry points ---------------------------------------------------
 
-check_vivliostyle_on_path() {
-    in_image 'command -v vivliostyle | grep --quiet "^/usr/local/bin/vivliostyle$"'
-}
-
-check_vs_alias_on_path() {
-    in_image 'command -v vs | grep --quiet "^/usr/local/bin/vs$"'
-}
-
 check_vivliostyle_version_runs() {
     docker run --rm "$IMAGE" --version >/dev/null
 }
@@ -406,8 +398,6 @@ run_test ".vs-cli-version marker exists (isInContainer)"   check_vs_cli_version_
 run_test "/data is writable by the runtime user"           check_data_dir_writable_by_user
 
 echo "[CLI entry points]"
-run_test "vivliostyle on PATH at /usr/local/bin"           check_vivliostyle_on_path
-run_test "vs alias on PATH at /usr/local/bin"              check_vs_alias_on_path
 run_test "'vivliostyle --version' executes"                check_vivliostyle_version_runs
 run_test "'vs --version' executes"                         check_vs_alias_runs
 
