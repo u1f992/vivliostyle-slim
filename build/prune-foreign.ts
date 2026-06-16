@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 
 const [arch, packageJsonPath] = process.argv.slice(2);
 
@@ -74,14 +73,12 @@ let pkg: unknown;
 try {
   pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 } catch {}
-if (
+const foreign =
   isRecord(pkg) &&
   !(
     (!isList(pkg.os) || checkList('linux', pkg.os)) &&
     (!isList(pkg.cpu) ||
       checkList(arch === 'arm64' ? 'arm64' : 'x64', pkg.cpu)) &&
     (!isList(pkg.libc) || checkList('glibc', pkg.libc))
-  )
-) {
-  fs.rmSync(path.dirname(packageJsonPath), { recursive: true, force: true });
-}
+  );
+process.exit(foreign ? 0 : 1);

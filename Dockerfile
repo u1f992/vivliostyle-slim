@@ -55,7 +55,10 @@ RUN cp --archive /tmp/vs-src /tmp/vs-build \
 RUN cp --archive /tmp/vs-src /tmp/vs-deps \
  && cd /tmp/vs-deps \
  && pnpm install --prod --ignore-scripts \
- && find node_modules/.pnpm -name package.json -type f -exec node /tmp/vs-src/build/prune-foreign.ts "${TARGETARCH}" {} \; \
+ && find node_modules/.pnpm -name package.json -type f -exec node /tmp/vs-src/build/prune-foreign.ts "${TARGETARCH}" {} \; -printf '%h\n' > /tmp/prune-foreign.txt \
+ && while IFS= read -r dir; do \
+      if [ -d "${dir}" ]; then rm --recursive --force "${dir}" && echo "prune-foreign: removed ${dir}"; fi; \
+    done < /tmp/prune-foreign.txt \
  && cp --archive node_modules /tmp/vivliostyle-cli/
 
 # Download the browser and resolve its dependency-package list
