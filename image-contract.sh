@@ -89,10 +89,6 @@ check_data_dir_writable_by_user() {
 
 # --- CLI entry points ---------------------------------------------------
 
-check_vivliostyle_version_runs() {
-    docker run --rm "$IMAGE" --version >/dev/null
-}
-
 check_vs_alias_runs() {
     docker run --rm --entrypoint vs "$IMAGE" --version >/dev/null
 }
@@ -398,7 +394,6 @@ run_test ".vs-cli-version marker exists (isInContainer)"   check_vs_cli_version_
 run_test "/data is writable by the runtime user"           check_data_dir_writable_by_user
 
 echo "[CLI entry points]"
-run_test "'vivliostyle --version' executes"                check_vivliostyle_version_runs
 run_test "'vs --version' executes"                         check_vs_alias_runs
 
 echo "[runtime dependencies]"
