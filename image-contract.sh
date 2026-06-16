@@ -101,17 +101,26 @@ check_vs_aliases_vivliostyle() {
 # --- runtime dependencies (Dockerfile-installed) ------------------------
 
 check_node() {
-    in_image 'node --version'
+    in_image 'node --eval "process.exit(2 + 2 === 4 ? 0 : 1)"'
 }
 
+# customize-processor lets users add JS packages inside the container, so the
+# meaningful check is that a package manager can actually install one and the
+# result runs -- using the CLI itself as the probe, not a stray external package.
 check_npm() {
-    # customize-processor example: users add packages to their own project
-    # and need a package manager available in the container.
-    in_image 'npm --version'
+    in_image '
+        d=$(mktemp -d) && cd "$d" &&
+        npm init -y >/dev/null 2>&1 &&
+        npm install @vivliostyle/cli >/dev/null 2>&1 &&
+        ./node_modules/.bin/vivliostyle --version >/dev/null'
 }
 
 check_pnpm() {
-    in_image 'pnpm --version'
+    in_image '
+        d=$(mktemp -d) && cd "$d" &&
+        pnpm init >/dev/null 2>&1 &&
+        pnpm add @vivliostyle/cli >/dev/null 2>&1 &&
+        ./node_modules/.bin/vivliostyle --version >/dev/null'
 }
 
 # --- press-ready (PDF/X-1a preflight) ------------------------------------
@@ -402,9 +411,9 @@ echo "[CLI entry points]"
 run_test "vs is the same CLI as vivliostyle"               check_vs_aliases_vivliostyle
 
 echo "[runtime dependencies]"
-run_test "node available"                                  check_node
-run_test "npm available (extension contract)"              check_npm
-run_test "pnpm available (extension contract)"             check_pnpm
+run_test "node executes JS (--eval)"                       check_node
+run_test "npm installs @vivliostyle/cli and it runs"       check_npm
+run_test "pnpm installs @vivliostyle/cli and it runs"      check_pnpm
 run_test "/etc/fonts/local.conf has Noto CJK aliases"      check_fonts_conf_noto_aliases
 run_test "Noto CJK JP font is installed"                   check_noto_cjk_font_installed
 
