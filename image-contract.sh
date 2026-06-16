@@ -122,15 +122,9 @@ check_pnpm() {
 }
 
 # --- press-ready (PDF/X-1a preflight) ------------------------------------
-# The contract is not "gs/poppler binaries exist on PATH" but "press-ready runs
-# end to end through vivliostyle". In a container the CLI runs the local
-# press-ready (src/output/pdf-postprocess.ts), which shells out to ghostscript
-# and to poppler's pdffonts/pdfinfo -- so one successful run exercises that whole
-# chain, and only a functional run like this catches breakage that leaves the
-# binaries on PATH but unloadable (e.g. a purged libassuan.so.9). A minimal book
-# built with pdfPostprocess.preflight=press-ready must come out rewritten by
-# Ghostscript: its Producer is "GPL Ghostscript ...", where a plain build leaves
-# "Skia/PDF". Reading that back with the image's own pdfinfo also confirms poppler.
+# The contract is that press-ready runs end to end, not that gs/poppler exist on
+# PATH -- a `command -v` check passes even for a present-but-unloadable binary,
+# as the purged-libassuan poppler breakage showed.
 check_press_ready_pdf() {
     local tmpdir rc=0
     tmpdir=$(mktemp --directory)
@@ -156,8 +150,8 @@ EOF
         rm --recursive --force "$tmpdir"
         return 1
     fi
-    # Ghostscript is what press-ready uses to rewrite the PDF, so a Ghostscript
-    # producer proves press-ready actually ran (not silently skipped).
+    # press-ready rewrites the PDF with Ghostscript, so a Ghostscript producer
+    # proves it ran rather than being skipped.
     local producer
     producer=$(docker run --rm --volume "$tmpdir":/data --entrypoint pdfinfo "$IMAGE" /data/out.pdf 2>/dev/null \
                | sed --quiet 's/^Producer:[[:space:]]*//p')
@@ -365,19 +359,11 @@ EOF
 }
 
 # --- derived-image extension (apt repair) -------------------------------
-# The slim image ships dpkg deliberately broken (keepers still Depend on purged
-# packages) and bundles no general package set, so extending it means repairing
-# first. The README documents the recipe; this test runs it verbatim for a
-# package whose dependency the build PURGED -- git Depends on perl, and
-# perl / perl-base / liberror-perl are all absent here -- then confirms the
-# package and its pulled-back dependency actually run, and that dpkg ended in a
-# clean (install ok installed) state rather than a forced/half-configured one.
+# git is the right probe: it is absent from the image and Depends on perl, which
+# the build purged, so installing it only works if the repair pulls that purged
+# dependency back in. Running git (not just installing it) then confirms the
+# result is actually executable.
 check_apt_repair_install() {
-    # The whole recipe -- repair then install -- runs in one container as root
-    # (apt/dpkg need it), so nothing is built and no image is left behind. git
-    # and perl (the purged dependency the install pulls back) must then run,
-    # dpkg must report a clean install, and a real commit must go through. The
-    # exit status of this single `docker run` is the test result.
     docker run --rm --user root --entrypoint sh "$IMAGE" -c '
         set -e
         apt-get update
@@ -387,16 +373,12 @@ check_apt_repair_install() {
         apt-get install --fix-broken --yes --no-install-recommends
         apt-get install --yes --no-install-recommends git
         rm --recursive --force /var/lib/apt/lists/*
-        # git and perl -- the purged dependency the install pulled back -- must
-        # both run, and dpkg must report a clean install for the package, its
-        # restored dependency, and the hand-bootstrapped Essential perl-base.
         git --version >/dev/null
         perl --version >/dev/null
         for p in git perl liberror-perl perl-base; do
             dpkg -s "$p" 2>/dev/null | grep --quiet "^Status: install ok installed" \
                 || { echo "$p is not cleanly installed" >&2; exit 1; }
         done
-        # exercise git end to end in a writable dir
         work=$(mktemp -d)
         cd "$work"
         git init --quiet
