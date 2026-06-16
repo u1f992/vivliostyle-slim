@@ -162,10 +162,11 @@ EOF
 }
 
 check_fonts_conf_noto_aliases() {
+    # local.conf exists to redirect common CJK families to the bundled Noto
+    # fonts; check the alias actually resolves, not just that the file names it.
     in_image '
-        test -f /etc/fonts/local.conf \
-        && grep --quiet "Noto Serif CJK JP" /etc/fonts/local.conf \
-        && grep --quiet "Noto Sans CJK JP"  /etc/fonts/local.conf'
+        fc-match "MS Mincho" | grep --quiet "Noto Serif CJK JP" &&
+        fc-match "MS Gothic" | grep --quiet "Noto Sans CJK JP"'
 }
 
 check_noto_cjk_font_installed() {
@@ -375,7 +376,7 @@ echo "[runtime dependencies]"
 run_test "node executes JS (--eval)"                       check_node
 run_test "npm installs @vivliostyle/cli and it runs"       check_npm
 run_test "pnpm installs @vivliostyle/cli and it runs"      check_pnpm
-run_test "/etc/fonts/local.conf has Noto CJK aliases"      check_fonts_conf_noto_aliases
+run_test "CJK font aliases resolve to Noto (fc-match)"     check_fonts_conf_noto_aliases
 run_test "Noto CJK JP font is installed"                   check_noto_cjk_font_installed
 
 echo "[fonts: full Noto set]"
