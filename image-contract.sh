@@ -95,7 +95,7 @@ check_vs_aliases_vivliostyle() {
     [ -n "$vs" ] && [ "$vs" = "$viv" ]
 }
 
-# --- runtime dependencies (Dockerfile-installed) ------------------------
+# --- other tools --------------------------------------------------------
 
 check_node() {
     in_image 'node --eval "process.exit(2 + 2 === 4 ? 0 : 1)"'
@@ -161,6 +161,7 @@ EOF
     esac
 }
 
+# --- fonts --------------------------------------------------------------
 check_fonts_conf_noto_aliases() {
     # local.conf exists to redirect common CJK families to the bundled Noto
     # fonts; check the alias actually resolves, not just that the file names it.
@@ -344,14 +345,14 @@ run_test "/data is writable by the runtime user"           check_data_dir_writab
 echo "[CLI entry points]"
 run_test "vs is the same CLI as vivliostyle"               check_vs_aliases_vivliostyle
 
-echo "[runtime dependencies]"
+echo "[other tools]"
 run_test "node executes JS (--eval)"                       check_node
 run_test "npm installs @vivliostyle/cli and it runs"       check_npm
 run_test "pnpm installs @vivliostyle/cli and it runs"      check_pnpm
-run_test "CJK font aliases resolve to Noto (fc-match)"     check_fonts_conf_noto_aliases
 
-echo "[fonts: full Noto set]"
-run_test "fonts-noto-core loadable (NotoSans-Regular.ttf)"            check_font_file_loadable NotoSans-Regular.ttf
+echo "[fonts]"
+run_test "CJK font aliases resolve to Noto (fc-match)"               check_fonts_conf_noto_aliases
+run_test "fonts-noto-core loadable (NotoSans-Regular.ttf)"           check_font_file_loadable NotoSans-Regular.ttf
 run_test "fonts-noto-cjk loadable (NotoSansCJK-Regular.ttc)"          check_font_file_loadable NotoSansCJK-Regular.ttc
 run_test "fonts-noto-cjk-extra loadable (NotoSansCJK-Thin.ttc)"       check_font_file_loadable NotoSansCJK-Thin.ttc
 run_test "fonts-noto-color-emoji loadable (NotoColorEmoji.ttf)"       check_font_file_loadable NotoColorEmoji.ttf
