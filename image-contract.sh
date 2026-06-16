@@ -239,10 +239,10 @@ check_preview_gui() {
 
 # --- browser build (headless PDF) ---------------------------------------
 # `vivliostyle build` must render a PDF with each browser the CLI advertises,
-# downloading any not bundled. (chrome is pinned below the bundled version to
-# exercise its download path here too.)
-
-cli_install_probe() {
+# downloading the ones it does not bundle. chrome is the bundled browser, so it
+# is also built at a pinned older major (chrome@130) to exercise that download
+# (on arm64 the CLI redirects chrome to /usr/bin/chromium, so it just passes).
+check_browser_build() {
     local browser_arg="$1"
     local tmpdir rc=0
     tmpdir=$(mktemp --directory)
@@ -250,11 +250,11 @@ cli_install_probe() {
     cat >"$tmpdir/manuscript.md" <<'EOF'
 # Hello
 
-Browser install contract end-to-end test.
+Browser build contract test.
 EOF
     cat >"$tmpdir/vivliostyle.config.js" <<'EOF'
 export default {
-  title: 'install',
+  title: 'build',
   entry: ['manuscript.md'],
   output: 'out.pdf',
 };
@@ -270,30 +270,6 @@ EOF
     ls --format=long --all "$tmpdir" >&2 || true
     rm --recursive --force "$tmpdir"
     return 1
-}
-
-check_cli_install_chrome() {
-    # Pin to a Chrome major below the bundled one. Bundled versions only
-    # move forward across releases, so this is guaranteed to differ from
-    # the bundle and from @stable, forcing the install code path. On
-    # linux/arm64 the CLI redirects chrome to /usr/bin/chromium
-    # (src/browser.ts:308-316) and the install path is unreachable.
-    local arch
-    arch=$(docker inspect --format '{{.Architecture}}' "$IMAGE")
-    if [ "$arch" = "arm64" ]; then return 0; fi
-    cli_install_probe chrome@130
-}
-
-check_cli_install_chromium() {
-    # Same arm64 fallback as chrome.
-    local arch
-    arch=$(docker inspect --format '{{.Architecture}}' "$IMAGE")
-    if [ "$arch" = "arm64" ]; then return 0; fi
-    cli_install_probe chromium
-}
-
-check_cli_install_firefox() {
-    cli_install_probe firefox
 }
 
 # --- end-to-end ---------------------------------------------------------
@@ -390,9 +366,10 @@ run_test "preview --browser chromium opens a GUI window"   check_preview_gui chr
 run_test "preview --browser firefox opens a GUI window"    check_preview_gui firefox
 
 echo "[browser build: each browser renders a headless PDF]"
-run_test "vivliostyle build --browser chrome@130 (linux/amd64)"   check_cli_install_chrome
-run_test "vivliostyle build --browser chromium (linux/amd64)"     check_cli_install_chromium
-run_test "vivliostyle build --browser firefox"                    check_cli_install_firefox
+run_test "build --browser chrome"                          check_browser_build chrome
+run_test "build --browser chromium"                        check_browser_build chromium
+run_test "build --browser firefox"                         check_browser_build firefox
+run_test "build --browser chrome@130"                      check_browser_build chrome@130
 
 echo "[derived image extension]"
 run_test "derived image repair + 'apt-get install git' (git runs)"   check_apt_repair_install
