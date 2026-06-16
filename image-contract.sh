@@ -273,36 +273,6 @@ EOF
     return 1
 }
 
-# --- end-to-end ---------------------------------------------------------
-
-check_end_to_end_pdf_build() {
-    local tmpdir
-    tmpdir=$(mktemp --directory)
-    chmod 777 "$tmpdir"
-    cat >"$tmpdir/manuscript.md" <<'EOF'
-# Hello
-
-Container contract end-to-end test.
-EOF
-    cat >"$tmpdir/vivliostyle.config.js" <<'EOF'
-export default {
-  title: 'contract',
-  entry: ['manuscript.md'],
-  output: 'out.pdf',
-};
-EOF
-    local rc=0
-    docker run --rm --volume "$tmpdir":/data "$IMAGE" build || rc=$?
-    if [ $rc -eq 0 ] && [ -f "$tmpdir/out.pdf" ] && head --bytes=4 "$tmpdir/out.pdf" | grep --quiet '^%PDF'; then
-        rm --recursive --force "$tmpdir"
-        return 0
-    fi
-    echo "build rc=$rc"
-    ls --format=long --all "$tmpdir" >&2 || true
-    rm --recursive --force "$tmpdir"
-    return 1
-}
-
 # --- derived-image extension (apt repair) -------------------------------
 # git is the right probe: it is absent from the image and Depends on perl, which
 # the build purged, so installing it only works if the repair pulls that purged
@@ -351,8 +321,8 @@ run_test "npm installs @vivliostyle/cli and it runs"       check_npm
 run_test "pnpm installs @vivliostyle/cli and it runs"      check_pnpm
 
 echo "[fonts]"
-run_test "CJK font aliases resolve to Noto (fc-match)"               check_fonts_conf_noto_aliases
-run_test "fonts-noto-core loadable (NotoSans-Regular.ttf)"           check_font_file_loadable NotoSans-Regular.ttf
+run_test "CJK font aliases resolve to Noto (fc-match)"                check_fonts_conf_noto_aliases
+run_test "fonts-noto-core loadable (NotoSans-Regular.ttf)"            check_font_file_loadable NotoSans-Regular.ttf
 run_test "fonts-noto-cjk loadable (NotoSansCJK-Regular.ttc)"          check_font_file_loadable NotoSansCJK-Regular.ttc
 run_test "fonts-noto-cjk-extra loadable (NotoSansCJK-Thin.ttc)"       check_font_file_loadable NotoSansCJK-Thin.ttc
 run_test "fonts-noto-color-emoji loadable (NotoColorEmoji.ttf)"       check_font_file_loadable NotoColorEmoji.ttf
@@ -361,25 +331,18 @@ run_test "fonts-noto-mono loadable (NotoMono-Regular.ttf)"            check_font
 run_test "fonts-noto-ui-core loadable (NotoLoopedLaoUI-Bold.ttf)"     check_font_file_loadable NotoLoopedLaoUI-Bold.ttf
 run_test "fonts-noto-ui-extra loadable (NotoLoopedLaoUI-Black.ttf)"   check_font_file_loadable NotoLoopedLaoUI-Black.ttf
 
-echo "[browser GUI: preview opens a window on an external X server]"
+echo "[rendering]"
 run_test "preview --browser chrome opens a GUI window"     check_preview_gui chrome
 run_test "preview --browser chromium opens a GUI window"   check_preview_gui chromium
 run_test "preview --browser firefox opens a GUI window"    check_preview_gui firefox
-
-echo "[browser build: each browser renders a headless PDF]"
 run_test "build --browser chrome"                          check_browser_build chrome
 run_test "build --browser chromium"                        check_browser_build chromium
 run_test "build --browser firefox"                         check_browser_build firefox
 run_test "build --browser chrome@130"                      check_browser_build chrome@130
-
-echo "[derived image extension]"
-run_test "derived image repair + 'apt-get install git' (git runs)"   check_apt_repair_install
-
-echo "[press-ready]"
 run_test "press-ready preflight runs end-to-end (gs + poppler)"   check_press_ready_pdf
 
-echo "[end-to-end]"
-run_test "vivliostyle build produces a valid PDF"          check_end_to_end_pdf_build
+echo "[derived image extension]"
+run_test "derived image repair + install git"   check_apt_repair_install
 
 echo
 echo "Total: $total  Pass: $pass  Fail: $fail"
