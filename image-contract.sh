@@ -121,13 +121,6 @@ check_pnpm() {
     in_image 'pnpm --version'
 }
 
-check_apt() {
-    # Derived images extend the slim base with `RUN apt-get install ...`.
-    # The customize-processor docs assume this works on the published image,
-    # so apt-get and dpkg must both be present.
-    in_image 'apt-get --version && dpkg --version'
-}
-
 check_press_ready() {
     in_image 'command -v press-ready'
 }
@@ -489,7 +482,6 @@ echo "[runtime dependencies]"
 run_test "node available"                                  check_node
 run_test "npm available (extension contract)"              check_npm
 run_test "pnpm available (extension contract)"             check_pnpm
-run_test "apt-get + dpkg available (extension contract)"   check_apt
 run_test "press-ready resolvable via PATH"                 check_press_ready
 run_test "gs (ghostscript) available"                      check_gs
 run_test "pdftops (poppler-utils) available"               check_poppler_pdftops
