@@ -35,7 +35,6 @@ debian-archive-keyring
 tzdata
 media-types
 publicsuffix
-gpgv
 libpaper-utils
 
 # essentials used implicitly, not reachable from the seed binaries

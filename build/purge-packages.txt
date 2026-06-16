@@ -27,7 +27,7 @@ python3-minimal
 python3.13
 python3.13-minimal
 
-# gnupg except gpgv, which apt keeps for repository signature verification
+# gnupg. libassuan9 is kept (poppler-utils -> libpoppler -> libgpgmepp6t64 -> libgpgme11t64).
 gnupg
 gnupg-l10n
 gpg
@@ -37,7 +37,6 @@ gpgconf
 dirmngr
 pinentry-curses
 libnpth0t64
-libassuan9
 libksba8
 
 xdg-utils
