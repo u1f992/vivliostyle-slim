@@ -12,6 +12,8 @@ permissions:
 env:
   IMAGE_NAME: ghcr.io/u1f992/vivliostyle-slim
   CLI_REPO: vivliostyle/vivliostyle-cli
+  TOOLING_PR: "793"
+  PNPM_VERSION: "10.34.3"
 
 jobs:
   prepare:
@@ -88,22 +90,38 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout slim Dockerfile + tooling
-        uses: actions/checkout@v6
-
-      - name: Checkout vivliostyle-cli
+      - name: Checkout vivliostyle-cli at the release ref
         uses: actions/checkout@v6
         with:
           repository: ${{ env.CLI_REPO }}
           ref: ${{ needs.prepare.outputs.cli_ref }}
           path: vivliostyle-cli
 
-      - name: Overlay the slim Dockerfile + tooling onto the checkout
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Bump pnpm to a libc-aware version and regenerate the lockfile
+        working-directory: vivliostyle-cli
         run: |
-          # .dockerignore is not overlaid: the CLI checkout ships its own.
-          cp -a Dockerfile image-contract.sh vivliostyle-cli/
-          # Merge our build/ assets into the CLI's existing build/ (keeps fonts.conf).
-          cp -a build/*.ts build/*.txt vivliostyle-cli/build/
+          # pnpm <= 10.28.2 (the release ref's pin) omits `libc` from the lockfile,
+          # so a glibc host installs the musl natives too; 10.34.3 records it, which
+          # voids the Dockerfile's foreign-platform prune.
+          jq --arg v "$PNPM_VERSION" '
+            .packageManager = "pnpm@\($v)"
+            | (if .devDependencies.pnpm then .devDependencies.pnpm = $v else . end)
+          ' package.json > package.json.tmp && mv package.json.tmp package.json
+          npm install --global "pnpm@$PNPM_VERSION"
+          pnpm install --lockfile-only --no-frozen-lockfile
+
+      - name: Overlay the slim tooling from the PR head
+        working-directory: vivliostyle-cli
+        run: |
+          git fetch https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
+          # Quote the glob so git applies it as a pathspec against the fetched
+          # tree (the working tree has no build/*.txt yet to expand against).
+          git checkout FETCH_HEAD -- Dockerfile image-contract.sh build/audit.ts 'build/*.txt'
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -161,8 +179,11 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout image-contract.sh
-        uses: actions/checkout@v6
+      - name: Fetch image-contract.sh from the PR head
+        run: |
+          git init -q .
+          git fetch --depth 1 https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
+          git checkout FETCH_HEAD -- image-contract.sh
 
       - name: Download this architecture's digest
         uses: actions/download-artifact@v8
