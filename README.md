@@ -21,21 +21,21 @@ RUN apt-get update \
 USER vivliostyle
 ```
 
-Re-slimming a derived image inherently means redoing the manual curation that went into the vivliostyle-slim image itself. Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
+Re-slimming a derived image inherently means redoing the contract-driven derivation behind the vivliostyle-slim purge list itself (`build/derive-purge/`). Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
 
 ## Local build
 
-Build a single-arch image into the local docker engine as `vivliostyle-slim:local`. package.json and pnpm-lock.yaml are not copied from the PR; they are edited in the CLI checkout and the lockfile is updated incrementally, so they stay consistent with the dependencies that `<cli-ref>` pins.
+Build a single-arch image into the local docker engine as `vivliostyle-slim:local`. package.json and pnpm-lock.yaml are not copied from the PR; they are edited in the CLI checkout and the lockfile is updated incrementally, so they stay consistent with the dependencies that `<cli-ref>` pins. Bumping pnpm to 10.28.2 and rebuilding the lockfile with `--fix-lockfile` makes it record each package's `libc`, which keeps the unused musl native bindings out of the published image.
 
 ```shellsession
 $ git clone https://github.com/vivliostyle/vivliostyle-cli
 $ cd vivliostyle-cli
 $ git checkout <cli-ref>   # the tag or sha you are packaging
 
-$ jq '.packageManager = "pnpm@10.34.3" | .devDependencies.pnpm = "10.34.3"' \
+$ jq '.packageManager = "pnpm@10.28.2" | .devDependencies.pnpm = "10.28.2"' \
     package.json > package.json.tmp && mv package.json.tmp package.json
-$ npm install --global pnpm@10.34.3
-$ pnpm install --lockfile-only
+$ npm install --global pnpm@10.28.2
+$ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
 $ git checkout FETCH_HEAD -- Dockerfile image-contract.sh build/audit.ts 'build/*.txt'
