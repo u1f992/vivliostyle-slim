@@ -38,7 +38,7 @@ $ npm install --global pnpm@10.28.2
 $ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile image-contract.sh build/audit.ts 'build/*.txt'
+$ git checkout FETCH_HEAD -- Dockerfile build/image-contract.sh build/audit.ts 'build/*.txt'
 
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
@@ -49,7 +49,7 @@ $ docker buildx build \
     --tag vivliostyle-slim:local --load .
 ```
 
-`image-contract.sh` captures the behavior that the upstream container and the slim container must implement alike. Run the contract check against that image with `IMAGE=vivliostyle-slim:local ./image-contract.sh`.
+`build/image-contract.sh` captures the behavior that the upstream container and the slim container must implement alike. Run the contract check against that image with `IMAGE=vivliostyle-slim:local ./build/image-contract.sh`. Its GUI preview tests leave a timestamped screenshot per browser under `build/screenshots/` (gitignored) to eyeball, since whether the window rendered correctly cannot be asserted mechanically.
 
 show gui on host x server
 

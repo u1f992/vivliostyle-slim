@@ -123,7 +123,7 @@ jobs:
           git fetch https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
           # Quote the glob so git applies it as a pathspec against the fetched
           # tree (the working tree has no build/*.txt yet to expand against).
-          git checkout FETCH_HEAD -- Dockerfile image-contract.sh build/audit.ts 'build/*.txt'
+          git checkout FETCH_HEAD -- Dockerfile build/image-contract.sh build/audit.ts 'build/*.txt'
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -181,11 +181,11 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Fetch image-contract.sh from the PR head
+      - name: Fetch build/image-contract.sh from the PR head
         run: |
           git init -q .
           git fetch --depth 1 https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
-          git checkout FETCH_HEAD -- image-contract.sh
+          git checkout FETCH_HEAD -- build/image-contract.sh
 
       - name: Download this architecture's digest
         uses: actions/download-artifact@v8
@@ -208,7 +208,15 @@ jobs:
           # architecture blocks the multi-arch tag.
           DIGEST="$(cat "digests/${{ matrix.arch }}")"
           docker pull "${IMAGE_NAME}@${DIGEST}"
-          IMAGE="${IMAGE_NAME}@${DIGEST}" ./image-contract.sh
+          IMAGE="${IMAGE_NAME}@${DIGEST}" ./build/image-contract.sh
+
+      - name: Upload GUI preview screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: preview-screenshots-${{ matrix.arch }}
+          path: build/screenshots/
+          if-no-files-found: warn
 
   manifest:
     needs: [prepare, verify]
