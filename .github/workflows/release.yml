@@ -181,11 +181,14 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Fetch build/image-contract.sh from the PR head
+      - name: Fetch build/image-contract.sh and its fixtures from the PR head
         run: |
           git init -q .
           git fetch --depth 1 https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
-          git checkout FETCH_HEAD -- build/image-contract.sh
+          # image-contract.sh reads committed fixtures (the press-ready input PDF
+          # and the render-matches-golden assets), so fetch build/fixtures too or
+          # those tests fail with "cp: cannot stat ...: No such file or directory".
+          git checkout FETCH_HEAD -- build/image-contract.sh build/fixtures
 
       - name: Download this architecture's digest
         uses: actions/download-artifact@v8
