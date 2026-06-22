@@ -38,7 +38,7 @@ $ npm install --global pnpm@10.28.2
 $ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile build/image-contract.sh build/audit.ts 'build/*.txt'
+$ git checkout FETCH_HEAD -- Dockerfile build/image-contract.sh build/audit.ts 'build/*.txt' build/fixtures
 
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
