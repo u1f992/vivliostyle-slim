@@ -121,9 +121,13 @@ jobs:
         working-directory: vivliostyle-cli
         run: |
           git fetch https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
-          # Quote the glob so git applies it as a pathspec against the fetched
-          # tree (the working tree has no build/*.txt yet to expand against).
-          git checkout FETCH_HEAD -- Dockerfile build/image-contract.sh build/audit.ts 'build/*.txt'
+          # Only the Docker build tooling is overlaid; build/fonts.conf already
+          # ships at the release ref, so it stays consistent with <cli-ref>.
+          # The Dockerfile's audit hook runs build/audit.ts, which reads
+          # build/purge.txt and build/purge-deps.txt. Quote the glob so git
+          # applies it as a pathspec against the fetched tree (the working tree
+          # has no build/*.txt yet to expand against).
+          git checkout FETCH_HEAD -- Dockerfile build/audit.ts 'build/*.txt'
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -181,14 +185,34 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Fetch build/image-contract.sh and its fixtures from the PR head
-        run: |
-          git init -q .
-          git fetch --depth 1 https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
-          # image-contract.sh reads committed fixtures (the press-ready input PDF
-          # and the render-matches-golden assets), so fetch build/fixtures too or
-          # those tests fail with "cp: cannot stat ...: No such file or directory".
-          git checkout FETCH_HEAD -- build/image-contract.sh build/fixtures
+      - name: Checkout the PR head's image contract test harness
+        # The contract is now the vitest + testcontainers suite in
+        # tests/docker-image.test.ts, run via `pnpm test:docker`. It is a
+        # black-box check driven entirely by VIVLIOSTYLE_CLI_IMAGE, so it needs
+        # the PR head's harness (and its testcontainers/vitest devDeps), not the
+        # <cli-ref> sources the image was built from.
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.CLI_REPO }}
+          ref: refs/pull/${{ env.TOOLING_PR }}/head
+          path: vivliostyle-cli
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: vivliostyle-cli/.nvmrc
+          cache: pnpm
+          cache-dependency-path: vivliostyle-cli/pnpm-lock.yaml
+
+      - name: Install the harness dependencies (testcontainers, vitest)
+        working-directory: vivliostyle-cli
+        run: pnpm install
 
       - name: Download this architecture's digest
         uses: actions/download-artifact@v8
@@ -203,22 +227,34 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Verify the image contract
+      - name: Pull the pushed image and tag it for testcontainers
+        id: image
         run: |
-          # Each architecture runs on its native runner, so the contract tests
-          # the real pushed bits without emulation. The manifest job needs this
-          # one and both matrix legs must pass, so a contract failure on either
-          # architecture blocks the multi-arch tag.
+          # Each architecture runs on its native runner, so the suite tests the
+          # real pushed bits without emulation.
           DIGEST="$(cat "digests/${{ matrix.arch }}")"
           docker pull "${IMAGE_NAME}@${DIGEST}"
-          IMAGE="${IMAGE_NAME}@${DIGEST}" ./build/image-contract.sh
+          # testcontainers resolves images by name; a plain local tag sidesteps
+          # parsing a name@digest ref and stops it re-pulling the untagged,
+          # digest-only manifest.
+          docker tag "${IMAGE_NAME}@${DIGEST}" vivliostyle-slim:verify
+          echo "ref=vivliostyle-slim:verify" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the image contract
+        working-directory: vivliostyle-cli
+        # The manifest job needs this one and both matrix legs must pass, so a
+        # contract failure on either architecture blocks the multi-arch tag.
+        run: pnpm test:docker
+        env:
+          VIVLIOSTYLE_CLI_IMAGE: ${{ steps.image.outputs.ref }}
+          VIVLIOSTYLE_CLI_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
 
       - name: Upload GUI preview screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: preview-screenshots-${{ matrix.arch }}
-          path: build/screenshots/
+          path: screenshots/
           if-no-files-found: warn
 
   manifest:

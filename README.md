@@ -38,7 +38,7 @@ $ npm install --global pnpm@10.28.2
 $ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile build/image-contract.sh build/audit.ts 'build/*.txt' build/fixtures
+$ git checkout FETCH_HEAD -- Dockerfile build/audit.ts 'build/*.txt'
 
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
@@ -49,7 +49,15 @@ $ docker buildx build \
     --tag vivliostyle-slim:local --load .
 ```
 
-`build/image-contract.sh` captures the behavior that the upstream container and the slim container must implement alike. Run the contract check against that image with `IMAGE=vivliostyle-slim:local ./build/image-contract.sh`. Its GUI preview tests leave a timestamped screenshot per browser under `build/screenshots/` (gitignored) to eyeball, since whether the window rendered correctly cannot be asserted mechanically.
+The image contract is a vitest + testcontainers suite (`tests/docker-image.test.ts`, run via `pnpm test:docker`) that captures the behavior the upstream container and the slim container must implement alike. It is a black-box check driven entirely by `VIVLIOSTYLE_CLI_IMAGE`, so run it from the PR head, which carries the harness and its `testcontainers`/`vitest` devDependencies. `git checkout -f FETCH_HEAD` moves the same clone to that tree (the build-time package.json and lockfile edits above are no longer needed):
+
+```shellsession
+$ git checkout -f FETCH_HEAD
+$ pnpm install
+$ VIVLIOSTYLE_CLI_IMAGE=vivliostyle-slim:local pnpm test:docker
+```
+
+Its GUI preview tests open a headful browser against an Xvfb sidecar; set `VIVLIOSTYLE_CLI_SCREENSHOT_DIR` to a directory to keep a screenshot per browser to eyeball, since whether the window rendered correctly cannot be asserted mechanically.
 
 show gui on host x server
 
