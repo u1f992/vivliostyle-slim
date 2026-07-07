@@ -59,7 +59,7 @@ jobs:
           echo "${IMAGE_NAME}:${SLIM_VERSION} is free."
 
       - name: Checkout vivliostyle-cli (metadata only)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.CLI_REPO }}
           ref: ${{ steps.parse.outputs.cli_ref }}
@@ -91,14 +91,14 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout vivliostyle-cli at the release ref
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.CLI_REPO }}
           ref: ${{ needs.prepare.outputs.cli_ref }}
           path: vivliostyle-cli
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -198,20 +198,20 @@ jobs:
         # black-box check driven entirely by VIVLIOSTYLE_CLI_IMAGE, so it needs
         # the PR head's harness (and its testcontainers/vitest devDeps), not the
         # <cli-ref> sources the image was built from.
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.CLI_REPO }}
           ref: refs/pull/${{ env.TOOLING_PR }}/head
           path: vivliostyle-cli
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: vivliostyle-cli/.nvmrc
           cache: pnpm
