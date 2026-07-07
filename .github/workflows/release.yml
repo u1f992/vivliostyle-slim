@@ -257,7 +257,11 @@ jobs:
         # v11.0.4, so they fail against any released cli-ref predating it. Filter
         # them out via a negative-lookahead testNamePattern until the target PR
         # is folded into a tagged cli release, then drop the `-t` argument.
-        run: pnpm test:docker -- -t '^(?!.*missing from /etc/passwd)'
+        # No `--` before `-t`: pnpm forwards the separator into the script, so
+        # `pnpm test:docker -- -t ...` reaches vitest as `... -- -t ...`, where the
+        # pattern is read as a positional filter rather than --testNamePattern and
+        # the exclusion silently does nothing (verified with pnpm 10.28.2).
+        run: pnpm test:docker -t '^(?!.*missing from /etc/passwd)'
         env:
           VIVLIOSTYLE_CLI_IMAGE: ${{ steps.image.outputs.ref }}
           VIVLIOSTYLE_CLI_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
