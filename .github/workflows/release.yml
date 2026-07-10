@@ -181,15 +181,8 @@ jobs:
         include:
           - arch: amd64
             runner: ubuntu-24.04
-          # TEMPORARY: the arm64 contract test is disabled. arm64-linux has no
-          # Chrome for Testing build, so the arm64 image runs the Debian system
-          # chromium, whose 150.0.7871.46-1~deb13u1 build (from trixie-security)
-          # crashes at startup via IMMEDIATE_CRASH (Debian bug #1141488, grave), so
-          # the testcontainers suite cannot pass on arm64. Re-enable this leg once
-          # trixie-security ships a fixed chromium.
-          # https://bugs.debian.org/1141488
-          # - arch: arm64
-          #   runner: ubuntu-24.04-arm
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout the PR head's image contract test harness
