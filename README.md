@@ -21,7 +21,7 @@ RUN apt-get update \
 USER vivliostyle
 ```
 
-Re-slimming a derived image inherently means redoing the contract-driven derivation behind the vivliostyle-slim purge list itself (`build/derive-purge/`). Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
+Re-slimming a derived image inherently means redoing the contract-driven derivation behind the vivliostyle-slim purge list itself (inlined in the `Dockerfile`). Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
 
 ## Local build
 
@@ -38,7 +38,7 @@ $ npm install --global pnpm@10.28.2
 $ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile build/audit.ts 'build/*.txt'
+$ git checkout FETCH_HEAD -- Dockerfile
 
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
@@ -57,7 +57,7 @@ $ pnpm install
 $ VIVLIOSTYLE_CLI_IMAGE=vivliostyle-slim:local pnpm test:docker
 ```
 
-Its GUI preview tests open a headful browser against an Xvfb sidecar; set `VIVLIOSTYLE_CLI_SCREENSHOT_DIR` to a directory to keep a screenshot per browser to eyeball, since whether the window rendered correctly cannot be asserted mechanically.
+Its GUI preview tests open a headful browser against an Xvfb sidecar; set `VIVLIOSTYLE_CLI_ARTIFACT_DIR` to a directory to keep the test artifacts (a screenshot per browser and the built PDFs) to eyeball, since whether the window rendered correctly cannot be asserted mechanically.
 
 show gui on host x server
 
