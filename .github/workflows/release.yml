@@ -121,13 +121,10 @@ jobs:
         working-directory: vivliostyle-cli
         run: |
           git fetch https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
-          # Only the Docker build tooling is overlaid; build/fonts.conf already
-          # ships at the release ref, so it stays consistent with <cli-ref>.
-          # The Dockerfile's audit hook runs build/audit.ts, which reads
-          # build/purge.txt and build/purge-deps.txt. Quote the glob so git
-          # applies it as a pathspec against the fetched tree (the working tree
-          # has no build/*.txt yet to expand against).
-          git checkout FETCH_HEAD -- Dockerfile build/audit.ts 'build/*.txt'
+          # Only the Dockerfile is overlaid; it now derives and purges packages
+          # inline, and build/fonts.conf already ships at the release ref, so the
+          # rest stays consistent with <cli-ref>.
+          git checkout FETCH_HEAD -- Dockerfile
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
