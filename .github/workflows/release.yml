@@ -254,7 +254,7 @@ jobs:
         run: pnpm test:docker -t '^(?!.*missing from /etc/passwd)'
         env:
           VIVLIOSTYLE_CLI_IMAGE: ${{ steps.image.outputs.ref }}
-          VIVLIOSTYLE_CLI_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
+          VIVLIOSTYLE_CLI_ARTIFACT_DIR: ${{ github.workspace }}/screenshots
 
       - name: Upload GUI preview screenshots
         if: always()
