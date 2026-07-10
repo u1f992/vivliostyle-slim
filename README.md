@@ -4,6 +4,14 @@ Pilot release of [vivliostyle/vivliostyle-cli#793](https://github.com/vivliostyl
 
 The tag convention is `<cli-ref>-<rev>`. `<cli-ref>` selects a specific commit of Vivliostyle CLI, given as either a tag or a full SHA. Mechanically, the run of digits after the final `-` is `<rev>`. Every `<cli-ref>-<rev>` pair is unique; no moving tags such as `latest` or `11` are published.
 
+## Fonts
+
+Since v11.0.4-3 the image bundles no font packages. The only installed face is [Adobe NotDef](https://github.com/adobe-fonts/adobe-notdef), so every glyph no font covers renders as a visible tofu box instead of falling back to a substitute ([vivliostyle/vivliostyle-cli#832](https://github.com/vivliostyle/vivliostyle-cli/issues/832)). Provide the fonts your document uses yourself: bundle them in the project and reference them with `@font-face`, or mount them under `/usr/share/fonts`:
+
+```
+$ docker run --rm --volume .:/data --volume ./fonts:/usr/share/fonts/mounted:ro ghcr.io/u1f992/vivliostyle-slim:<tag> build
+```
+
 ## Derived images
 
 The slim build force-purges install-time-only packages, deliberately leaving dpkg broken. Extending the image with `apt-get install` first requires a repair that undoes most of the slim tuning:
@@ -38,7 +46,7 @@ $ npm install --global pnpm@10.28.2
 $ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile
+$ git checkout FETCH_HEAD -- Dockerfile build/adobe-notdef
 
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
