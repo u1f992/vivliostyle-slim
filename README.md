@@ -33,17 +33,12 @@ Re-slimming a derived image inherently means redoing the contract-driven derivat
 
 ## Local build
 
-Build a single-arch image into the local docker engine as `vivliostyle-slim:local`. package.json and pnpm-lock.yaml are not copied from the PR; they are edited in the CLI checkout and the lockfile is updated incrementally, so they stay consistent with the dependencies that `<cli-ref>` pins. Bumping pnpm to 10.28.2 and rebuilding the lockfile with `--fix-lockfile` makes it record each package's `libc`, which keeps the unused musl native bindings out of the published image.
+Build a single-arch image into the local docker engine as `vivliostyle-slim:local`.
 
 ```shellsession
 $ git clone https://github.com/vivliostyle/vivliostyle-cli
 $ cd vivliostyle-cli
 $ git checkout <cli-ref>   # the tag or sha you are packaging
-
-$ jq '.packageManager = "pnpm@10.28.2" | .devDependencies.pnpm = "10.28.2"' \
-    package.json > package.json.tmp && mv package.json.tmp package.json
-$ npm install --global pnpm@10.28.2
-$ pnpm install --lockfile-only --fix-lockfile
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
 $ git checkout FETCH_HEAD -- Dockerfile build/adobe-notdef
@@ -57,7 +52,7 @@ $ docker buildx build \
     --tag vivliostyle-slim:local --load .
 ```
 
-The image contract is a vitest + testcontainers suite (`tests/docker-image.test.ts`, run via `pnpm test:docker`) that captures the behavior the upstream container and the slim container must implement alike. It is a black-box check driven entirely by `VIVLIOSTYLE_CLI_IMAGE`, so run it from the PR head, which carries the harness and its `testcontainers`/`vitest` devDependencies. `git checkout -f FETCH_HEAD` moves the same clone to that tree (the build-time package.json and lockfile edits above are no longer needed):
+The image contract is a vitest + testcontainers suite (`tests/docker-image.test.ts`, run via `pnpm test:docker`) that captures the behavior the upstream container and the slim container must implement alike. It is a black-box check driven entirely by `VIVLIOSTYLE_CLI_IMAGE`, so run it from the PR head, which carries the harness and its `testcontainers`/`vitest` devDependencies. `git checkout -f FETCH_HEAD` moves the same clone to that tree:
 
 ```shellsession
 $ git checkout -f FETCH_HEAD

@@ -97,26 +97,6 @@ jobs:
           ref: ${{ needs.prepare.outputs.cli_ref }}
           path: vivliostyle-cli
 
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Bump pnpm and regenerate the lockfile so it records libc
-        working-directory: vivliostyle-cli
-        run: |
-          # The release ref's pnpm writes the lockfile without `libc`, so a glibc
-          # host would install the musl natives too. `--fix-lockfile` makes pnpm
-          # record `libc` -- it's the flag, not the pnpm version, that does this, so
-          # PNPM_VERSION need not climb past 10.28.2 -- letting the Dockerfile's
-          # foreign-platform prune drop the unused musl bindings.
-          jq --arg v "$PNPM_VERSION" '
-            .packageManager = "pnpm@\($v)"
-            | (if .devDependencies.pnpm then .devDependencies.pnpm = $v else . end)
-          ' package.json > package.json.tmp && mv package.json.tmp package.json
-          npm install --global "pnpm@$PNPM_VERSION"
-          pnpm install --lockfile-only --fix-lockfile --no-frozen-lockfile
-
       - name: Overlay the slim tooling from the PR head
         working-directory: vivliostyle-cli
         run: |
