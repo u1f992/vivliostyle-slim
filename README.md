@@ -49,6 +49,7 @@ $ docker buildx build \
     --allow security.insecure \
     --build-arg VS_CLI_VERSION=$(jq -r .version package.json) \
     --build-arg BROWSER=chrome@$(sed -n '/START DEFAULT_BROWSER_VERSIONS/,/END DEFAULT_BROWSER_VERSIONS/p' src/constants.ts | grep -oP 'chrome:\s*\K\{[^}]+\}' | jq -r .linux) \
+    --build-arg BUNDLE_NOTO=0 \
     --tag vivliostyle-slim:local --load .
 ```
 
