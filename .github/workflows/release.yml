@@ -13,7 +13,9 @@ env:
   IMAGE_NAME: ghcr.io/u1f992/vivliostyle-slim
   CLI_REPO: vivliostyle/vivliostyle-cli
   TOOLING_PR: "793"
-  PNPM_VERSION: "10.28.2"
+  # must match packageManager in the PR head's package.json, or
+  # pnpm/action-setup refuses the conflicting versions
+  PNPM_VERSION: "11.10.0"
 
 jobs:
   prepare:
@@ -129,11 +131,16 @@ jobs:
           # push-by-digest pushes an untagged, digest-only manifest -- GHCR has no
           # "remove tag, keep manifest", so per-arch images are never tagged; the
           # index assembled in the manifest job references them by digest.
+          #
+          # BUNDLE_NOTO=0: since vivliostyle/vivliostyle-cli#859 the upstream
+          # Dockerfile defaults to bundling the Noto set; the slim release keeps
+          # shipping no font packages (README "Fonts").
           docker buildx build \
             --platform "linux/${{ matrix.arch }}" \
             --allow security.insecure \
             --build-arg VS_CLI_VERSION=${{ needs.prepare.outputs.cli_version }} \
             --build-arg BROWSER=${{ needs.prepare.outputs.browser }} \
+            --build-arg BUNDLE_NOTO=0 \
             --output "type=image,name=${IMAGE_NAME},push-by-digest=true,name-canonical=true,push=true" \
             --metadata-file "${RUNNER_TEMP}/metadata.json" \
             vivliostyle-cli
@@ -220,17 +227,9 @@ jobs:
         working-directory: vivliostyle-cli
         # The manifest job needs this one and both matrix legs must pass, so a
         # contract failure on either architecture blocks the multi-arch tag.
-        #
-        # STOPGAP: the "uid:gid missing from /etc/passwd" tests exercise the
-        # writable-HOME browser fix (#835, src/browser.ts) that landed after
-        # v11.0.4, so they fail against any released cli-ref predating it. Filter
-        # them out via a negative-lookahead testNamePattern until the target PR
-        # is folded into a tagged cli release, then drop the `-t` argument.
-        # No `--` before `-t`: pnpm forwards the separator into the script, so
-        # `pnpm test:docker -- -t ...` reaches vitest as `... -- -t ...`, where the
-        # pattern is read as a positional filter rather than --testNamePattern and
-        # the exclusion silently does nothing (verified with pnpm 10.28.2).
-        run: pnpm test:docker -t '^(?!.*missing from /etc/passwd)'
+        # The uid:gid tests require a cli-ref of v11.1.0 or later (the
+        # writable-HOME browser fix, #846).
+        run: pnpm test:docker
         env:
           VIVLIOSTYLE_CLI_IMAGE: ${{ steps.image.outputs.ref }}
           VIVLIOSTYLE_CLI_ARTIFACT_DIR: ${{ github.workspace }}/screenshots
