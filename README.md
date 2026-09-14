@@ -29,7 +29,7 @@ RUN apt-get update \
 USER vivliostyle
 ```
 
-Re-slimming a derived image inherently means redoing the contract-driven derivation behind the vivliostyle-slim purge list itself (inlined in the `Dockerfile`). Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
+Re-slimming a derived image inherently means redoing the contract-driven derivation behind the vivliostyle-slim purge list itself (inlined in `Dockerfile.slim`). Offering something like a convenience script for re-slimming is impractical, but the vivliostyle-slim build process should serve as a valuable reference.
 
 ## Local build
 
@@ -41,11 +41,12 @@ $ cd vivliostyle-cli
 $ git checkout <cli-ref>   # the tag or sha you are packaging
 
 $ git fetch https://github.com/vivliostyle/vivliostyle-cli pull/793/head
-$ git checkout FETCH_HEAD -- Dockerfile build/adobe-notdef
+$ git checkout FETCH_HEAD -- Dockerfile.slim build/adobe-notdef
 
 $ docker buildx create --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' --use
 $ docker buildx build \
+    --file Dockerfile.slim \
     --allow security.insecure \
     --build-arg VS_CLI_VERSION=$(jq -r .version package.json) \
     --build-arg BROWSER=chrome@$(sed -n '/START DEFAULT_BROWSER_VERSIONS/,/END DEFAULT_BROWSER_VERSIONS/p' src/constants.ts | grep -oP 'chrome:\s*\K\{[^}]+\}' | jq -r .linux) \

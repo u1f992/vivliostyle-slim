@@ -103,9 +103,9 @@ jobs:
         working-directory: vivliostyle-cli
         run: |
           git fetch https://github.com/${{ env.CLI_REPO }} pull/${{ env.TOOLING_PR }}/head
-          # The Dockerfile plus the Adobe NotDef font it copy-ins; the rest
+          # Dockerfile.slim plus the Adobe NotDef font it copy-ins; the rest
           # stays consistent with <cli-ref>.
-          git checkout FETCH_HEAD -- Dockerfile build/adobe-notdef
+          git checkout FETCH_HEAD -- Dockerfile.slim build/adobe-notdef
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -124,18 +124,19 @@ jobs:
         run: |
           # mmdebstrap runs a real root chroot and bind-mounts /proc,/sys,/dev for
           # the package maintainer scripts, which needs CAP_SYS_ADMIN + an
-          # unconfined profile. The Dockerfile's `RUN --security=insecure` supplies
-          # that, gated by the builder's --allow-insecure-entitlement above and the
-          # --allow flag here.
+          # unconfined profile. Dockerfile.slim's `RUN --security=insecure`
+          # supplies that, gated by the builder's --allow-insecure-entitlement
+          # above and the --allow flag here.
           #
           # push-by-digest pushes an untagged, digest-only manifest -- GHCR has no
           # "remove tag, keep manifest", so per-arch images are never tagged; the
           # index assembled in the manifest job references them by digest.
           #
-          # BUNDLE_NOTO=0: since vivliostyle/vivliostyle-cli#859 the upstream
-          # Dockerfile defaults to bundling the Noto set; the slim release keeps
-          # shipping no font packages (README "Fonts").
+          # BUNDLE_NOTO=0: the slim release ships no font packages (README
+          # "Fonts"), pinned here rather than left to the Dockerfile.slim
+          # default.
           docker buildx build \
+            --file vivliostyle-cli/Dockerfile.slim \
             --platform "linux/${{ matrix.arch }}" \
             --allow security.insecure \
             --build-arg VS_CLI_VERSION=${{ needs.prepare.outputs.cli_version }} \
