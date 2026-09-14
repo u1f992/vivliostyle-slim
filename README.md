@@ -59,7 +59,7 @@ The image contract is a vitest + testcontainers suite (`tests/docker-image.test.
 ```shellsession
 $ git checkout -f FETCH_HEAD
 $ pnpm install
-$ VIVLIOSTYLE_CLI_IMAGE=vivliostyle-slim:local pnpm test:docker
+$ VIVLIOSTYLE_CLI_IMAGE=vivliostyle-slim:local VIVLIOSTYLE_CLI_IMAGE_SLIM=1 pnpm test:docker
 ```
 
 Its GUI preview tests open a headful browser against an Xvfb sidecar; set `VIVLIOSTYLE_CLI_ARTIFACT_DIR` to a directory to keep the test artifacts (a screenshot per browser and the built PDFs) to eyeball, since whether the window rendered correctly cannot be asserted mechanically.

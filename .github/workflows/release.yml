@@ -233,6 +233,7 @@ jobs:
         run: pnpm test:docker
         env:
           VIVLIOSTYLE_CLI_IMAGE: ${{ steps.image.outputs.ref }}
+          VIVLIOSTYLE_CLI_IMAGE_SLIM: "1"
           VIVLIOSTYLE_CLI_ARTIFACT_DIR: ${{ github.workspace }}/screenshots
 
       - name: Upload GUI preview screenshots
